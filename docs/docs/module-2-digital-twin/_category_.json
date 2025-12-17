@@ -1,0 +1,8 @@
+{
+  "label": "Module 2: Digital Twin - Virtual Testing Ground",
+  "position": 2,
+  "link": {
+    "type": "generated-index",
+    "description": "Master physics simulation and sensor modeling using Gazebo and Unity to create realistic digital twins of humanoid robots for safe testing and development."
+  }
+}

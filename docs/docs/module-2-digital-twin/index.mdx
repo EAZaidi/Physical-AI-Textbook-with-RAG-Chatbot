@@ -1,0 +1,242 @@
+---
+title: "Module 2 Overview"
+description: "Build physics-accurate and visually realistic digital twins of humanoid robots"
+sidebar_position: 0
+---
+
+# Module 2: The Digital Twin (Gazebo & Unity)
+
+## Overview
+
+Digital twins are virtual replicas of physical systems that enable testing, validation, and optimization without expensive hardware. In this module, you'll learn to create accurate digital twins of humanoid robots using industry-standard simulation tools:
+
+- **Gazebo Fortress**: Physics-accurate robot simulation with realistic dynamics, collision detection, and sensor modeling
+- **Unity 2022.3 LTS**: High-fidelity 3D environments with photorealistic rendering for perception algorithm development
+
+By the end of this module, you'll be able to simulate humanoid robots in complex environments, collect synthetic sensor data, and validate control algorithms before hardware deployment.
+
+---
+
+## Why Digital Twins Matter
+
+Testing robotics algorithms on physical hardware is:
+- **Expensive**: Each fall or collision can damage $500-$5,000 in components
+- **Slow**: Setup, testing, data collection, and repairs take hours per iteration
+- **Dangerous**: High-torque motors can cause injuries during unexpected behaviors
+- **Limited**: Hardware constraints prevent testing edge cases (extreme terrain, sensor failures)
+
+Digital twins solve these problems by providing:
+- **Zero marginal cost**: Run thousands of simulations for free
+- **Perfect reproducibility**: Reset to exact initial conditions instantly
+- **Synthetic data generation**: Create labeled datasets for machine learning
+- **Risk-free experimentation**: Test catastrophic failures safely
+
+**Real-world impact**: Leading robotics companies (Boston Dynamics, Agility Robotics, Figure AI) rely on simulation for 80-90% of algorithm development, deploying to hardware only after extensive validation.
+
+---
+
+## Learning Objectives
+
+By completing this module, you will:
+
+### 1. Physics Simulation (Chapter 1)
+- Set up reproducible Gazebo environments using Docker
+- Configure physics parameters (gravity, friction, solver settings)
+- Import URDF humanoid models with proper inertial properties
+- Diagnose and fix simulation issues (jitter, explosions, instability)
+- Validate physics accuracy against theoretical predictions
+
+### 2. High-Fidelity Visualization (Chapter 2)
+- Install Unity 2022.3 LTS with Unity Robotics Hub packages
+- Create realistic 3D scenes with lighting, materials, and interactive objects
+- Import URDF models using Unity's ArticulationBody system
+- Implement camera controls and physics interactions with C# scripts
+- Optimize scenes for real-time performance (60+ FPS)
+
+### 3. Sensor Simulation (Chapter 3)
+- Configure GPU-accelerated LiDAR sensors with realistic noise models
+- Set up depth cameras for RGB-D data collection
+- Simulate IMU sensors (accelerometer + gyroscope)
+- Collect and export sensor data (PCD point clouds, PNG depth images, CSV IMU logs)
+- Validate sensor accuracy against ground truth
+
+---
+
+## Prerequisites
+
+### Required Knowledge
+- **Module 1**: Robot modeling with URDF (joints, links, inertial properties)
+- **ROS 2 Basics**: Topics, nodes, messages (covered in Module 1)
+- **Linux fundamentals**: Command line navigation, file permissions
+- **Python 3**: Basic syntax, reading/writing files
+
+### Software Requirements
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Docker** | 20.10+ | Containerized Gazebo environment |
+| **Gazebo Fortress** | 6.x | Physics simulation (via Docker) |
+| **Unity** | 2022.3 LTS | High-fidelity visualization |
+| **ROS 2** | Humble | Sensor data streaming (via Docker) |
+| **Python** | 3.11+ | Data processing scripts |
+
+### Hardware Requirements
+
+**Minimum**:
+- CPU: Quad-core (Intel i5 / AMD Ryzen 5 or equivalent)
+- RAM: 8 GB
+- GPU: Integrated graphics (Intel UHD / AMD Vega)
+- Disk: 15 GB free space
+
+**Recommended**:
+- CPU: Hexa-core or better (Intel i7 / AMD Ryzen 7)
+- RAM: 16 GB
+- GPU: Discrete GPU (GTX 1060 6GB / RX 580 8GB or better)
+- Disk: 30 GB free space (SSD preferred)
+
+---
+
+## Module Structure
+
+### [Chapter 1: Physics Simulation with Gazebo](./01-gazebo-physics.mdx)
+**Estimated Time**: 4-6 hours
+
+Learn physics-accurate simulation using Gazebo Fortress:
+- Docker-based Gazebo setup (cross-platform: Linux, WSL2, macOS)
+- Creating simulation worlds with configurable physics
+- Importing humanoid URDF models
+- Troubleshooting physics issues (jitter, instability)
+- Exercises: Gravity validation, friction experiments, humanoid balance
+
+**Key Output**: Stable humanoid simulation running at 30+ FPS with accurate physics
+
+---
+
+### [Chapter 2: High-Fidelity Visual Environments with Unity](./02-unity-scenes.mdx)
+**Estimated Time**: 4-6 hours
+
+Build photorealistic 3D scenes for perception testing:
+- Unity installation and project setup
+- Creating interactive environments with lighting and materials
+- Importing URDF robots using Unity Robotics Hub
+- Configuring ArticulationBody physics
+- Implementing C# scripts for camera control and physics debugging
+- Performance optimization for real-time rendering
+
+**Key Output**: Interactive Unity scene with robot achieving 60+ FPS
+
+---
+
+### [Chapter 3: Sensor Simulation and Data Collection](./03-sensor-simulation.mdx)
+**Estimated Time**: 4-5 hours
+
+Accurately simulate sensors for algorithm development:
+- GPU-accelerated LiDAR configuration (360° scans, noise models)
+- Depth camera setup (RGB-D data with realistic parameters)
+- IMU simulation (accelerometer + gyroscope with Gaussian noise)
+- ROS 2 data streaming and collection
+- Exporting to standard formats (PCD, PNG, CSV)
+- Sensor accuracy validation (±5cm LiDAR, ±2% depth camera)
+
+**Key Output**: Synthetic sensor datasets ready for perception algorithm testing
+
+---
+
+## Workflow Integration
+
+This module teaches two complementary simulation approaches:
+
+| Aspect | Gazebo | Unity |
+|--------|--------|-------|
+| **Strengths** | Physics accuracy, sensor plugins | Visual fidelity, performance |
+| **Use Cases** | Control development, dynamics testing | Perception, visualization |
+| **Typical FPS** | 30-100 FPS | 60-240 FPS |
+| **Data Output** | ROS topics (PointCloud2, LaserScan, Imu) | Rendered images, virtual cameras |
+
+**Best Practice**: Use **both** tools in tandem:
+1. Develop control algorithms in Gazebo (accurate physics)
+2. Test perception pipelines in Unity (realistic sensors)
+3. Sync physics state from Gazebo → Unity via ROS TCP Connector (optional advanced topic)
+
+---
+
+## Projects and Exercises
+
+Each chapter includes hands-on exercises:
+
+### Chapter 1 Exercises
+1. **Gravity Validation**: Verify free-fall physics (±5% accuracy)
+2. **Friction Experiment**: Test sliding on inclined planes
+3. **Humanoid Balance**: Configure inertial properties for stable standing
+
+### Chapter 2 Exercises
+1. **Test Environment**: Build furnished apartment scene (60+ FPS)
+2. **Robot Manipulation**: Implement arm controller for object grasping
+3. **Visual SLAM Dataset**: Generate synthetic RGB-D dataset with ground-truth poses
+
+### Chapter 3 Exercises
+1. **LiDAR Mapping**: Create 2D occupancy grid map using SLAM Toolbox
+2. **Depth-Based Object Detection**: Threshold depth images for object segmentation
+3. **IMU Orientation Estimation**: Integrate gyroscope data for pose tracking
+
+---
+
+## Assessment Criteria
+
+Upon completing this module, you should be able to demonstrate:
+
+**Knowledge**:
+- ✅ Explain the difference between physics-accurate and visually realistic simulation
+- ✅ Describe key physics parameters (gravity, friction, solver iterations, timestep)
+- ✅ Identify common simulation issues and their root causes
+
+**Skills**:
+- ✅ Set up Gazebo Fortress in Docker on Linux/WSL2/macOS
+- ✅ Create Unity scenes with robot models and interactive elements
+- ✅ Configure LiDAR, depth cameras, and IMU sensors with realistic parameters
+- ✅ Export sensor data to standard formats for algorithm development
+- ✅ Debug simulation performance issues
+
+**Deliverables**:
+- ✅ Stable Gazebo simulation of humanoid robot (10+ minutes without crashes)
+- ✅ Unity scene with textured environment (60+ FPS on recommended hardware)
+- ✅ Synthetic sensor datasets (LiDAR PCD, depth PNG, IMU CSV)
+
+---
+
+## Additional Resources
+
+### Official Documentation
+- [Gazebo Fortress Documentation](https://gazebosim.org/docs/fortress/)
+- [Unity Robotics Hub](https://github.com/Unity-Technologies/Unity-Robotics-Hub)
+- [ROS 2 Humble Documentation](https://docs.ros.org/en/humble/)
+- [SDF Format Specification](http://sdformat.org/spec)
+
+### Tutorials and Guides
+- [Gazebo + ROS 2 Integration](https://github.com/ros-simulation/gazebo_ros_pkgs)
+- [Unity URDF Importer Guide](https://github.com/Unity-Technologies/Unity-Robotics-Hub/blob/main/tutorials/urdf_importer/urdf_tutorial.md)
+- [Open3D Point Cloud Library](http://www.open3d.org/docs/release/)
+- [Docker for Robotics](https://www.docker.com/blog/robotics/)
+
+### Community
+- [Gazebo Community Forum](https://community.gazebosim.org/)
+- [Unity Robotics Discord](https://discord.com/invite/Unity)
+- [ROS Discourse](https://discourse.ros.org/)
+
+---
+
+## Getting Started
+
+**Ready to begin?** Start with [Chapter 1: Physics Simulation with Gazebo](./01-gazebo-physics.mdx) to set up your Docker environment and create your first simulation world.
+
+**Stuck?** Check the troubleshooting sections in each chapter, or consult the official documentation linked above.
+
+**Want to skip ahead?** While chapters build on each other conceptually, Chapters 2 (Unity) and 3 (Sensors in Gazebo) can be completed independently after Chapter 1.
+
+---
+
+**Estimated Total Time**: 12-17 hours (including exercises)
+
+**Module Completion**: You'll have functional digital twin environments ready for Module 3 (perception algorithms) and Module 4 (control systems).
+
+Let's get started! 🚀

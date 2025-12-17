@@ -1,0 +1,270 @@
+---
+id: 01-overview-architecture
+title: "Chapter 1: ROS 2 Overview and System Architecture"
+description: "Understanding ROS 2 middleware, DDS, and the ROS 2 graph"
+module: "module-1-ros2"
+chapter: "01"
+section: "overview-architecture"
+keywords: ["ROS 2", "DDS", "middleware", "architecture", "computation graph", "ROS 1 vs ROS 2"]
+sidebar_position: 2
+---
+
+# Chapter 1: ROS 2 Overview and System Architecture
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+1. Explain the key differences between ROS 1 and ROS 2
+2. Describe the DDS middleware layer and its role in ROS 2
+3. Identify components of the ROS 2 graph (nodes, topics, services, actions)
+4. Draw a simple ROS 2 communication diagram for a robot system
+5. Understand why ROS 2 was designed for distributed, real-time systems
+
+**Estimated Time**: 1.5-2 hours
+
+---
+
+## 1. Introduction to ROS 2
+
+### What is ROS 2?
+
+[TODO: Write 2-3 paragraphs explaining:]
+- ROS 2 = Robot Operating System 2 (middleware, NOT an OS)
+- Enables modular robot software development
+- Industry standard for robotics (research + commercial)
+- Target audience: AI-driven humanoid robotics students
+
+**Key Concept**: ROS 2 provides abstraction layer between hardware and application logic, enabling code reusability across different robot platforms.
+
+**Further Reading**:
+- [ROS 2 Documentation](https://docs.ros.org/en/humble/index.html)
+- [About ROS 2](https://docs.ros.org/en/humble/Concepts/About.html)
+
+---
+
+## 2. ROS 1 vs ROS 2: Evolution of Robot Middleware
+
+### Historical Context
+
+[TODO: Write 1-2 paragraphs on:]
+- ROS 1 origins (2007, Willow Garage)
+- Why ROS 2 was needed (production systems, real-time, multi-robot)
+- Migration timeline (ROS 1 EOL 2025)
+
+### Key Differences
+
+| Feature | ROS 1 | ROS 2 |
+|---------|-------|-------|
+| **Middleware** | Custom TCPROS | DDS (OMG standard) |
+| **Communication** | Central roscore | Peer-to-peer (no roscore) |
+| **Real-time support** | Limited | DDS QoS policies |
+| **Multi-robot** | Requires rosbridge | Native support |
+| **Security** | None | DDS security plugins |
+| **Python version** | Python 2.7 (EOL) | Python 3.x |
+| **OS Support** | Linux-focused | Linux, Windows, macOS |
+
+**Summary Points**:
+- **ROS 1**: Research-focused, single-robot systems, no real-time guarantees
+- **ROS 2**: Production-ready, multi-robot, real-time capable, secure
+- **Commonality**: Both use nodes, topics, services (conceptual similarity)
+
+**Further Reading**:
+- [ROS 2 Design](https://design.ros2.org/)
+- [Why ROS 2?](https://docs.ros.org/en/humble/The-ROS2-Project/Contributing/Migration-Guide.html)
+
+---
+
+## 3. The DDS Middleware Layer
+
+### What is DDS?
+
+[TODO: Write 2-3 paragraphs explaining:]
+- DDS = Data Distribution Service (OMG standard since 2004)
+- Publish-subscribe middleware (not ROS-specific)
+- Used in defense, aerospace, automotive (proven technology)
+
+**Diagram**: [See `assets/diagrams/ros1-vs-ros2-architecture.svg`]
+
+### Peer-to-Peer Architecture
+
+**ROS 1 Architecture** (Central Broker):
+```
+[Nodes] → [roscore] ← [Nodes]
+         (single point of failure)
+```
+
+**ROS 2 Architecture** (Peer-to-Peer):
+```
+[Node A] ←→ DDS ←→ [Node B]
+[Node C] ←→ DDS ←→ [Node D]
+(no central broker, distributed discovery)
+```
+
+[TODO: Explain advantages of peer-to-peer:]
+- No single point of failure
+- Scalable to large robot fleets
+- Nodes discover each other automatically
+
+### Quality of Service (QoS) Profiles
+
+DDS enables fine-grained control over message delivery:
+
+| QoS Policy | Options | Use Case |
+|------------|---------|----------|
+| **Reliability** | Reliable, Best-effort | Sensor data vs control commands |
+| **Durability** | Volatile, Transient-local | Real-time vs late-joining subscribers |
+| **History** | Keep-last(N), Keep-all | Buffer size management |
+
+[TODO: Add 1-2 examples of QoS configuration]
+
+**Further Reading**:
+- [About DDS and ROS 2](https://docs.ros.org/en/humble/Concepts/About-Different-Middleware-Vendors.html)
+- [QoS Policies](https://docs.ros.org/en/humble/Concepts/About-Quality-of-Service-Settings.html)
+
+---
+
+## 4. The ROS 2 Graph
+
+### Graph Components
+
+The **ROS 2 graph** is the network of nodes and their communication links.
+
+**Diagram**: [See `assets/diagrams/ros2-graph-example.svg`]
+
+#### Nodes
+[TODO: Write 1 paragraph:]
+- Processes performing computation (sensor drivers, planners, controllers)
+- Can run on different computers (distributed systems)
+- Communicate via topics, services, actions
+
+#### Topics
+[TODO: Write 1 paragraph:]
+- Named buses for asynchronous pub-sub communication
+- Many-to-many (N publishers, M subscribers)
+- Example: `/camera/image_raw`, `/cmd_vel`
+
+#### Services
+[TODO: Write 1 paragraph:]
+- Synchronous request-response communication
+- One server, multiple clients
+- Example: `/reset_controller`, `/set_parameters`
+
+#### Actions
+[TODO: Write 1 paragraph (brief):]
+- Long-running tasks with feedback and cancellation
+- Example: Navigation to waypoint, manipulation sequence
+- (Covered in detail in later modules)
+
+### Example: Simple Humanoid Robot Graph
+
+```
+Camera Driver Node
+    ↓ (publishes) /camera/image_raw [sensor_msgs/Image]
+Vision Processing Node
+    ↓ (publishes) /detected_objects [vision_msgs/DetectionArray]
+Motion Planning Node
+    ↓ (publishes) /joint_trajectory [trajectory_msgs/JointTrajectory]
+Motor Controller Node
+```
+
+[TODO: Add explanation of data flow in this example]
+
+**Tool**: Visualize graph with `rqt_graph` command
+
+---
+
+## 5. Topics vs Services vs Actions
+
+### Decision Guide
+
+**Diagram**: [See `assets/diagrams/communication-patterns-decision-tree.svg`]
+
+| Pattern | When to Use | Example |
+|---------|-------------|---------|
+| **Topic** | Continuous data streams, one-to-many | Camera images, robot state, sensor readings |
+| **Service** | One-time request, immediate response | Reset controller, save map, get parameters |
+| **Action** | Long task, needs feedback/cancellation | Navigate to goal, pick-and-place, trajectory execution |
+
+**Rule of Thumb**:
+- **Streaming data?** → Topic
+- **Quick request/response?** → Service
+- **Long task with progress?** → Action
+
+[TODO: Add 2-3 concrete examples with explanations]
+
+---
+
+## 6. Summary
+
+### Key Takeaways
+
+- ROS 2 is **middleware** for building modular robot software
+- **DDS** provides peer-to-peer, real-time communication (no roscore)
+- **ROS 2 graph** = nodes + topics + services + actions
+- **Topics** for continuous data, **services** for requests, **actions** for long tasks
+- ROS 2 is **production-ready**: real-time, multi-robot, secure
+
+### Self-Check Questions
+
+1. What are the three main communication patterns in ROS 2?
+2. How does ROS 2's architecture differ from ROS 1? (Hint: DDS vs roscore)
+3. When would you use a topic instead of a service?
+4. What is QoS and why is it important in robotics?
+
+**Answers**: [End of chapter]
+
+---
+
+## 7. Practice Exercises
+
+### Exercise 1: Identify Communication Patterns
+
+For each scenario, identify whether to use a **Topic**, **Service**, or **Action**:
+
+1. Stream camera images at 30 FPS
+   - **Answer**: [TODO - fill in]
+
+2. Request robot's current battery level (one-time query)
+   - **Answer**: [TODO - fill in]
+
+3. Command robot to navigate to waypoint and wait for completion
+   - **Answer**: [TODO - fill in]
+
+4. Publish joint angles continuously for visualization
+   - **Answer**: [TODO - fill in]
+
+### Exercise 2: Draw a ROS 2 Graph
+
+**Task**: Draw a ROS 2 graph for a simple humanoid robot with:
+- **Nodes**: Camera driver, Joint state publisher, Motion planner, Motor controller
+- **Topics**: `/camera/image`, `/joint_states`, `/cmd_vel`
+- **Services**: `/reset_pose`
+
+**Deliverable**: Hand-drawn or digital diagram showing nodes, topics (with arrows), and services
+
+**Hints**:
+- Use arrows to show message flow direction
+- Label topics with message types
+- Indicate which nodes publish/subscribe to which topics
+
+---
+
+## 8. Further Reading
+
+### Official Documentation
+- [ROS 2 Humble Documentation](https://docs.ros.org/en/humble/)
+- [ROS 2 Design Rationale](https://design.ros2.org/)
+- [DDS and ROS 2](https://docs.ros.org/en/humble/Concepts/About-Different-Middleware-Vendors.html)
+
+### Next Chapter
+**Chapter 2: Nodes, Topics, and Services** - Dive deeper into ROS 2 communication with code examples
+
+---
+
+## Answers to Self-Check Questions
+
+1. **Three main communication patterns**: Topics (pub-sub), Services (request-response), Actions (long tasks with feedback)
+2. **ROS 2 vs ROS 1**: ROS 2 uses peer-to-peer DDS (no central roscore), enabling distributed systems and better real-time performance
+3. **Topic vs Service**: Topics for continuous/streaming data (sensor readings), Services for one-time requests (get configuration, reset state)
+4. **QoS**: Quality of Service policies control message delivery (reliability, durability, history). Important for balancing performance vs data integrity in robot systems.

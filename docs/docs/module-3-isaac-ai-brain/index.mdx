@@ -1,0 +1,138 @@
+---
+sidebar_position: 0
+---
+
+# Module 3 Overview
+
+Welcome to Module 3! In this module, you'll learn to build the "AI brain" of a humanoid robot—the complete autonomous navigation stack that enables robots to perceive their environment, build maps, and navigate safely.
+
+## Module Overview
+
+This module teaches you to integrate three powerful technologies:
+
+1. **NVIDIA Isaac Sim**: Photorealistic robot simulation for unlimited synthetic data generation
+2. **NVIDIA Isaac ROS**: GPU-accelerated perception pipelines (Visual SLAM)
+3. **Nav2**: ROS 2 navigation framework for path planning and reactive control
+
+By the end of this module, you'll have a complete autonomous navigation system where a humanoid robot can navigate unknown warehouse environments in real-time.
+
+## Prerequisites
+
+Before starting Module 3, you should have completed:
+
+- **Module 1: ROS 2 Fundamentals** — Understanding of nodes, topics, services, launch files
+- **Module 2: Digital Twin Simulation** — Experience with URDF modeling and Gazebo/Unity simulation
+
+You'll also need:
+
+**Hardware**:
+- NVIDIA GPU (RTX 3060 or better, 8GB+ VRAM)
+- Ubuntu 22.04 LTS
+- 16GB+ RAM, 50GB free disk space
+
+**Software**:
+- Isaac Sim 2023.1.1+ (via NVIDIA Omniverse)
+- Docker with NVIDIA Container Toolkit
+- ROS 2 Humble Hawksbill
+
+## Learning Path
+
+### [Chapter 1: Isaac Sim — Synthetic Data Generation](./01-isaac-sim-data)
+
+**Time**: 2-3 hours | **Difficulty**: Beginner
+
+Learn to generate synthetic sensor data in photorealistic simulation:
+- Install and configure Isaac Sim
+- Load humanoid robots with cameras and LiDAR
+- Record rosbags with RGB images, depth maps, point clouds
+- Visualize sensor data in RViz2
+
+**Key Skills**: Isaac Sim basics, ROS 2 bridge, sensor simulation
+
+---
+
+### [Chapter 2: Isaac ROS — GPU-Accelerated VSLAM](./02-isaac-ros-vslam)
+
+**Time**: 3-4 hours | **Difficulty**: Intermediate
+
+Build real-time perception with GPU acceleration:
+- Set up Isaac ROS Docker containers
+- Configure stereo Visual SLAM for humanoid robots
+- Process camera data at >20 FPS (RTX 3060)
+- Generate 3D maps and accurate pose estimation
+
+**Key Skills**: Docker GPU setup, VSLAM concepts, Isaac ROS pipelines
+
+---
+
+### [Chapter 3: Nav2 — Bipedal Path Planning](./03-nav2-planning)
+
+**Time**: 3-4 hours | **Difficulty**: Intermediate
+
+Configure autonomous navigation for bipedal robots:
+- Understand Nav2 architecture (planners, controllers, costmaps)
+- Tune parameters for humanoid motion (velocities, footprint, clearances)
+- Convert VSLAM maps to occupancy grids
+- Send navigation goals and monitor execution
+
+**Key Skills**: Nav2 configuration, DWB controller, behavior trees
+
+---
+
+### [Chapter 4: Integration — Complete AI Brain](./04-integration)
+
+**Time**: 2-3 hours | **Difficulty**: Advanced
+
+Integrate everything into autonomous navigation:
+- Launch full stack (Isaac Sim + Isaac ROS + Nav2)
+- Run warehouse exploration demo
+- Handle edge cases (tracking loss, recovery behaviors)
+- Monitor system performance (CPU, GPU, latency)
+
+**Key Skills**: System integration, performance tuning, failure handling
+
+---
+
+## What You'll Build
+
+By completing this module, you'll have:
+
+✅ **Photorealistic simulation environment** with humanoid robot and sensors
+✅ **Real-time VSLAM system** processing 30 FPS camera data with GPU acceleration
+✅ **Autonomous navigation stack** planning collision-free paths for bipedal locomotion
+✅ **Integrated AI brain** enabling fully autonomous warehouse navigation
+
+## Module Statistics
+
+- **4 chapters**: 23,200+ words of tutorial content
+- **13 Python scripts**: Fully tested code examples
+- **4 launch files**: ROS 2 system integration
+- **3 Isaac Sim scenes**: Ready-to-use simulation environments
+- **12+ exercises**: Hands-on practice with real scenarios
+
+## Support Resources
+
+### Official Documentation
+- **Isaac Sim**: [https://docs.omniverse.nvidia.com/isaacsim/latest/](https://docs.omniverse.nvidia.com/isaacsim/latest/)
+- **Isaac ROS**: [https://nvidia-isaac-ros.github.io/](https://nvidia-isaac-ros.github.io/)
+- **Nav2**: [https://navigation.ros.org/](https://navigation.ros.org/)
+
+### Code Examples
+All code is available at: `/static/code-examples/module-3/`
+
+### Troubleshooting
+Each chapter includes detailed troubleshooting sections for common issues.
+
+---
+
+## Ready to Start?
+
+Begin your journey with [Chapter 1: Isaac Sim — Synthetic Data Generation →](./01-isaac-sim-data)
+
+Or if you need to set up your environment first, refer to the installation instructions in Chapter 1.
+
+---
+
+**Estimated Total Time**: 10-14 hours (including environment setup and exercises)
+
+**Difficulty Progression**: Beginner → Intermediate → Advanced

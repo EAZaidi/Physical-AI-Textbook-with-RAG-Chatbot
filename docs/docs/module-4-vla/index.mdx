@@ -1,0 +1,119 @@
+---
+sidebar_position: 0
+---
+
+# Module 4 Overview
+
+Welcome to Module 4: Vision-Language-Action (VLA)! In this module, you'll learn to build cognitive systems that enable humanoid robots to understand natural language commands, plan complex tasks using Large Language Models (LLMs), and execute actions autonomously.
+
+## Module Overview
+
+This module teaches you to integrate four powerful technologies:
+
+1. **OpenAI Whisper** - Speech-to-text for voice commands
+2. **Large Language Models (LLMs)** - Cognitive planning with GPT-4/Claude
+3. **Visual Grounding** - Language-conditioned object detection with Grounding DINO
+4. **ROS 2 Integration** - Connecting AI to robot actions (Nav2, MoveIt2)
+
+By the end of this module, you'll build a complete autonomous humanoid robot that can:
+- Listen to voice commands ("Fetch the book from the shelf")
+- Plan multi-step tasks using an LLM
+- Detect and locate objects using language-guided vision
+- Execute actions in Isaac Sim with error recovery
+
+## What You'll Learn
+
+### Chapter 1: Foundations of VLA Systems
+- Understand the VLA pipeline: Speech → LLM → Vision → Action
+- Compare VLA architectures (RT-1, PaLM-E, Code as Policies)
+- Learn the ReAct pattern (Reasoning + Acting)
+- Identify common failure modes and solutions
+
+### Chapter 2: Voice-to-Action Pipeline with Whisper
+- Install and optimize OpenAI Whisper for robotics
+- Build a ROS 2 node for real-time speech transcription
+- Implement Voice Activity Detection (VAD)
+- Handle multilingual commands and background noise
+
+### Chapter 3: Cognitive Planning with LLMs for ROS 2
+- Engineer effective prompts for robot task planning
+- Implement ReAct agents with LangChain
+- Build visual grounding with Grounding DINO
+- Map LLM outputs to ROS 2 action servers
+
+### Chapter 4: Autonomous Humanoid Capstone
+- Integrate Whisper + LLM + Visual Grounding + Nav2 + MoveIt2
+- Build complete autonomous demos:
+  - "Prepare the room for a meeting"
+  - "Fetch the book from the shelf"
+  - "Clean the living room"
+- Handle dynamic obstacles and replanning
+
+## Prerequisites
+
+**Completed Modules**:
+- ✅ Module 1: ROS 2 Fundamentals
+- ✅ Module 2: Digital Twin (URDF, Gazebo, Isaac Sim)
+- ✅ Module 3: Isaac AI Brain (VSLAM, Nav2, Isaac ROS)
+
+**System Requirements**:
+- Ubuntu 22.04 LTS
+- ROS 2 Humble Hawksbill
+- Isaac Sim 2023.1.1+
+- NVIDIA GPU (RTX 3060+ with 12GB VRAM)
+- Python 3.10+
+- Microphone (USB recommended)
+- OpenAI or Anthropic API key (or local LLM setup)
+
+## Time Estimate
+
+- **Chapter 1** (Foundations): 1-2 hours
+- **Chapter 2** (Whisper): 2-3 hours
+- **Chapter 3** (LLM Planning): 3-4 hours
+- **Chapter 4** (Capstone): 2-3 hours
+- **Total**: 8-12 hours
+
+## Key Technologies
+
+This module uses cutting-edge AI and robotics technologies:
+
+| Technology | Purpose | Performance |
+|------------|---------|-------------|
+| **OpenAI Whisper (base)** | Speech-to-text | 0.6s latency, 98% accuracy |
+| **GPT-4o / Claude Sonnet** | Task planning | 3-5s per action |
+| **Grounding DINO** | Object detection | 40ms, 52.5 AP zero-shot |
+| **LangChain** | LLM orchestration | ReAct pattern support |
+| **Nav2** | Navigation | From Module 3 |
+| **MoveIt2** | Manipulation | Grasp planning |
+
+## Learning Outcomes
+
+By completing this module, you will be able to:
+
+1. ✅ Explain how VLA systems unify speech, vision, and control
+2. ✅ Implement real-time voice command systems with >80% accuracy
+3. ✅ Write LLM prompts that generate executable robot action sequences
+4. ✅ Build visual grounding systems for language-referenced objects
+5. ✅ Integrate all components into an autonomous humanoid robot
+6. ✅ Debug and fix common VLA failure modes
+
+## Code Examples
+
+All code examples for this module are available in the `code-examples/` folder:
+
+- **Whisper transcription node**: Real-time speech-to-text with ROS 2
+- **LLM planner node**: ReAct-based cognitive planning
+- **Visual grounding node**: Grounding DINO + depth estimation
+- **Action executor**: Nav2 and MoveIt2 integration
+- **Capstone integration**: Complete VLA system
+- **Prompt templates**: System prompts for different task types
+
+All code examples are available in `docs/static/code-examples/module-4/` with detailed usage instructions in the README.
+
+## Getting Started
+
+Ready to build a voice-controlled robot? Let's dive into **Chapter 1: Foundations of VLA Systems** to understand the core concepts!
+
+---
+
+**Next**: Start with Chapter 1 - Foundations of VLA Systems

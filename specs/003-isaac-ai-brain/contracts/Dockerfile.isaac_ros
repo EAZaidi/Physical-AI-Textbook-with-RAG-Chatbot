@@ -1,0 +1,56 @@
+# Isaac ROS Docker Container for Module 3
+# Feature: 003-isaac-ai-brain
+# Base: NVIDIA Isaac ROS Development Container
+# Reference: https://nvidia-isaac-ros.github.io/getting_started/isaac_ros_buildfarm_cdn.html
+
+FROM nvcr.io/nvidia/isaac-ros:humble-ros2_humble_20231122
+
+# Metadata
+LABEL maintainer="Physical AI & Humanoid Robotics Textbook"
+LABEL description="Isaac ROS VSLAM + Nav2 environment for Module 3"
+LABEL version="1.0"
+
+# Environment variables
+ENV ROS_DISTRO=humble
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=all
+
+# Install additional ROS 2 packages
+RUN apt-get update && apt-get install -y \
+    ros-${ROS_DISTRO}-navigation2 \
+    ros-${ROS_DISTRO}-nav2-bringup \
+    ros-${ROS_DISTRO}-turtlebot3-gazebo \
+    ros-${ROS_DISTRO}-rviz2 \
+    ros-${ROS_DISTRO}-rqt-* \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Isaac ROS Visual SLAM dependencies (if not in base image)
+# Note: Base image should already include isaac_ros_visual_slam
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    && pip3 install --upgrade pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create workspace directory
+RUN mkdir -p /workspaces/isaac_ros-dev/src
+WORKDIR /workspaces/isaac_ros-dev
+
+# Copy example launch files and configs (optional)
+# COPY ./launch /workspaces/isaac_ros-dev/src/module3_launch/launch
+# COPY ./config /workspaces/isaac_ros-dev/src/module3_launch/config
+
+# Build workspace (if custom packages added)
+# RUN . /opt/ros/${ROS_DISTRO}/setup.bash && \
+#     cd /workspaces/isaac_ros-dev && \
+#     colcon build --symlink-install
+
+# Source ROS 2 setup in bashrc
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
+RUN echo "source /workspaces/isaac_ros-dev/install/setup.bash 2>/dev/null || true" >> /root/.bashrc
+
+# Expose ROS 2 DDS ports (if using bridge network)
+# EXPOSE 7400 7401 7402 7403
+
+# Default command
+CMD ["/bin/bash"]

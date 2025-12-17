@@ -1,0 +1,392 @@
+---
+id: 02-nodes-topics-services
+title: "Chapter 2: Nodes, Topics, and Services"
+description: "Deep dive into ROS 2 communication patterns and command-line tools"
+module: "module-1-ros2"
+chapter: "02"
+section: "nodes-topics-services"
+keywords: ["nodes", "topics", "services", "actions", "QoS", "publish-subscribe", "request-response", "communication patterns"]
+sidebar_position: 3
+---
+
+# Chapter 2: Nodes, Topics, and Services
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+1. Understand node lifecycle and roles in ROS 2 systems
+2. Explain topic-based publish-subscribe communication
+3. Differentiate between topics and services
+4. Identify message and service types (std_msgs, sensor_msgs, geometry_msgs)
+5. Use ROS 2 command-line tools to inspect running systems
+
+**Estimated Time**: 2-2.5 hours
+
+---
+
+## 1. Nodes in Depth
+
+### What is a Node?
+
+[TODO: Write 2 paragraphs explaining:]
+- Node = independent process performing specific computation
+- Examples: camera_driver, motion_planner, motor_controller
+- Nodes can run on different computers (distributed robotics)
+
+### Node Lifecycle
+
+```
+[Unconfigured] → [Inactive] → [Active] → [Finalized]
+                      ↓           ↓
+                  [Shutdown] ← [Error]
+```
+
+[TODO: Explain each state and transitions]
+
+**Key Concept**: Nodes have managed lifecycle (configure → activate → deactivate → cleanup)
+
+### Node Naming and Namespaces
+
+**Syntax**: `/<namespace>/<node_name>`
+
+Examples:
+- `/camera_driver` (root namespace)
+- `/robot1/camera_driver` (robot1 namespace)
+- `/robot2/camera_driver` (robot2 namespace)
+
+[TODO: Explain why namespaces matter for multi-robot systems]
+
+### Code Preview: Minimal Node Structure
+
+```python title="minimal_node.py" showLineNumbers
+import rclpy
+from rclpy.node import Node
+
+class MinimalNode(Node):
+    def __init__(self):
+        super().__init__('minimal_node')
+        self.get_logger().info('Node initialized')
+
+def main():
+    rclpy.init()
+    node = MinimalNode()
+    rclpy.spin(node)  # Keep node running
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+**Note**: Full tutorial in Chapter 3
+
+**Further Reading**:
+- [Understanding ROS 2 Nodes](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Nodes/Understanding-ROS2-Nodes.html)
+
+---
+
+## 2. Topics in Depth
+
+### Publish-Subscribe Pattern
+
+**Concept**: Publishers send messages to topics; subscribers receive messages from topics. Publishers and subscribers don't know about each other (loose coupling).
+
+```
+Publisher 1 ──┐
+              ├──→ Topic: /sensor_data ──→ Subscriber 1
+Publisher 2 ──┘                       └──→ Subscriber 2
+```
+
+[TODO: Explain advantages of loose coupling]
+
+### Topic Naming Conventions
+
+**Best Practices**:
+- Use `/` for hierarchy: `/robot/sensor/camera`
+- Descriptive names: `/camera/image_raw` not `/img`
+- Avoid special characters except `_` and `/`
+
+### Common Message Types
+
+| Package | Message Type | Description | Use Case |
+|---------|--------------|-------------|----------|
+| `std_msgs` | `String` | Text data | Debugging, simple commands |
+| `std_msgs` | `Int32`, `Float64` | Numeric values | Sensor readings, counters |
+| `sensor_msgs` | `Image` | Camera images | Computer vision |
+| `sensor_msgs` | `JointState` | Joint positions/velocities | Robot state |
+| `geometry_msgs` | `Twist` | Linear/angular velocity | Mobile robot control |
+| `geometry_msgs` | `Pose` | Position + orientation | Robot localization |
+
+[TODO: Add example use case for each message type]
+
+### Quality of Service (QoS) for Topics
+
+**Common Profiles**:
+
+1. **Sensor Data** (Best-effort, Volatile):
+   ```python
+   from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+
+   qos = QoSProfile(
+       reliability=ReliabilityPolicy.BEST_EFFORT,
+       durability=DurabilityPolicy.VOLATILE,
+       depth=10
+   )
+   ```
+
+2. **Control Commands** (Reliable, Transient-local):
+   ```python
+   qos = QoSProfile(
+       reliability=ReliabilityPolicy.RELIABLE,
+       durability=DurabilityPolicy.TRANSIENT_LOCAL,
+       depth=10
+   )
+   ```
+
+[TODO: Explain when to use each profile]
+
+**Further Reading**:
+- [Understanding ROS 2 Topics](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Topics/Understanding-ROS2-Topics.html)
+- [About QoS Settings](https://docs.ros.org/en/humble/Concepts/About-Quality-of-Service-Settings.html)
+
+---
+
+## 3. Services in Depth
+
+### Request-Response Pattern
+
+**Concept**: Client sends request to service server; server processes request and returns response. Synchronous (blocking) communication.
+
+```
+Service Client ──[Request]──→ Service Server
+               ←─[Response]──
+```
+
+**Key Difference from Topics**:
+- Services: One-time request/response (1:1)
+- Topics: Continuous streaming (N:M)
+
+### Service Naming Conventions
+
+**Best Practices**:
+- Use verbs: `/reset_controller`, `/set_parameters`
+- Namespace services: `/robot1/reset_controller`
+
+### Common Service Types
+
+| Package | Service Type | Request → Response | Use Case |
+|---------|--------------|-------------------|----------|
+| `std_srvs` | `SetBool` | `bool data` → `bool success, string message` | Enable/disable features |
+| `std_srvs` | `Trigger` | `{}` → `bool success, string message` | Reset, save, trigger actions |
+| `example_interfaces` | `AddTwoInts` | `int64 a, int64 b` → `int64 sum` | Tutorial example |
+
+[TODO: Add examples of custom service definitions]
+
+### Synchronous vs Asynchronous Service Calls
+
+**Synchronous** (blocks until response):
+```python
+response = client.call(request)  # Waits for response
+```
+
+**Asynchronous** (non-blocking):
+```python
+future = client.call_async(request)  # Returns immediately
+rclpy.spin_until_future_complete(node, future)
+response = future.result()
+```
+
+[TODO: Explain when to use each approach]
+
+**Further Reading**:
+- [Understanding ROS 2 Services](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Services/Understanding-ROS2-Services.html)
+
+---
+
+## 4. Choosing Communication Patterns
+
+### Decision Matrix
+
+| Criteria | Topic | Service | Action |
+|----------|-------|---------|--------|
+| **Frequency** | Continuous/periodic | One-time | One-time (long duration) |
+| **Direction** | One-way (pub→sub) | Two-way (req↔res) | Two-way with feedback |
+| **Blocking** | Non-blocking | Blocking (sync/async) | Non-blocking (async) |
+| **Example** | Sensor data stream | Get parameter | Navigate to goal |
+
+### Use Case Examples
+
+1. **Camera streaming**: Topic (continuous, one-way)
+2. **Reset robot pose**: Service (one-time, request/response)
+3. **Navigate to waypoint**: Action (long task, needs progress feedback)
+4. **Publish joint angles**: Topic (continuous, visualization)
+5. **Get battery level**: Service (query current state)
+
+[TODO: Add 3-5 more examples with explanations]
+
+---
+
+## 5. Command-Line Tools
+
+### Inspecting Nodes
+
+```bash
+# List all running nodes
+ros2 node list
+
+# Get info about specific node
+ros2 node info /camera_driver
+
+# Output:
+#   Subscribers:
+#   Publishers:
+#     /camera/image_raw [sensor_msgs/msg/Image]
+#   Service Servers:
+#   Service Clients:
+#   Action Servers:
+#   Action Clients:
+```
+
+### Inspecting Topics
+
+```bash
+# List all active topics
+ros2 topic list
+
+# Get topic info
+ros2 topic info /camera/image_raw
+# Output: Type: sensor_msgs/msg/Image, Publishers: 1, Subscribers: 2
+
+# Echo messages on topic (see live data)
+ros2 topic echo /camera/image_raw
+
+# Publish to topic manually
+ros2 topic pub /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.5}, angular: {z: 0.1}}"
+
+# Get topic bandwidth/frequency
+ros2 topic hz /camera/image_raw
+ros2 topic bw /camera/image_raw
+```
+
+### Inspecting Services
+
+```bash
+# List all services
+ros2 service list
+
+# Get service type
+ros2 service type /reset_controller
+
+# Call service manually
+ros2 service call /reset_controller std_srvs/srv/Trigger
+```
+
+### Visualizing the Graph
+
+```bash
+# Launch graphical tool
+rqt_graph
+```
+
+[TODO: Add screenshot of rqt_graph showing example robot system]
+
+**Further Reading**:
+- [CLI Tools Tutorial](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools.html)
+
+---
+
+## 6. Summary
+
+### Key Takeaways
+
+- **Nodes** are independent processes communicating via ROS 2
+- **Topics** enable asynchronous pub-sub (many-to-many)
+- **Services** enable synchronous request-response (one-to-many)
+- **Message types** define data structures (std_msgs, sensor_msgs, geometry_msgs)
+- **QoS profiles** control delivery guarantees (reliability, durability, history)
+- **CLI tools** enable inspection and debugging of running systems
+
+### Self-Check Questions
+
+1. What is the difference between a topic and a service?
+2. When would you use `ReliabilityPolicy.BEST_EFFORT` vs `RELIABLE`?
+3. How do you find out what topics a node is publishing?
+4. What command would you use to see live data on a topic?
+
+**Answers**: [End of chapter]
+
+---
+
+## 7. Practice Exercises
+
+### Exercise 1: Use CLI Tools
+
+**Setup**: Run ROS 2 demo nodes:
+```bash
+# Terminal 1: Start talker
+ros2 run demo_nodes_py talker
+
+# Terminal 2: Start listener
+ros2 run demo_nodes_py listener
+```
+
+**Tasks**:
+1. List all running nodes
+2. Find the topic that talker publishes to
+3. Echo messages on that topic
+4. Get the message type of the topic
+5. Visualize the graph with `rqt_graph`
+
+**Expected Output**: [TODO - describe what students should see]
+
+### Exercise 2: Identify Message Types
+
+For each scenario, choose the appropriate message type:
+
+1. Publishing robot's current position (x, y, z) and orientation
+   - **Answer**: [TODO - geometry_msgs/Pose]
+
+2. Streaming camera images for object detection
+   - **Answer**: [TODO]
+
+3. Publishing motor velocities for wheeled robot
+   - **Answer**: [TODO]
+
+4. Sending simple text commands
+   - **Answer**: [TODO]
+
+### Exercise 3: Design Communication
+
+**Scenario**: Humanoid robot with camera, joint sensors, and motion controller
+
+**Design Task**:
+1. List 3 topics the robot should publish
+2. List 2 services the robot should provide
+3. Choose appropriate message/service types
+4. Draw a simple node graph
+
+**Deliverable**: Diagram + justification for choices
+
+---
+
+## 8. Further Reading
+
+### Official Documentation
+- [ROS 2 Concepts](https://docs.ros.org/en/humble/Concepts.html)
+- [ROS 2 Tutorials (Beginner)](https://docs.ros.org/en/humble/Tutorials/Beginner-CLI-Tools.html)
+- [Message and Service Types](https://docs.ros.org/en/humble/Concepts/About-ROS-Interfaces.html)
+
+### Next Chapter
+**Chapter 3: Python-to-ROS Control via rclpy** - Hands-on coding with publishers, subscribers, and services
+
+---
+
+## Answers to Self-Check Questions
+
+1. **Topic vs Service**: Topics are for continuous, one-way data streams (pub-sub); Services are for one-time, two-way request-response interactions
+
+2. **BEST_EFFORT vs RELIABLE**: Use BEST_EFFORT for high-frequency sensor data where occasional loss is acceptable (camera images). Use RELIABLE for critical commands where delivery must be guaranteed (control commands, parameters)
+
+3. **Finding node's publishers**: `ros2 node info /node_name` shows all publishers, subscribers, services for that node
+
+4. **Viewing live topic data**: `ros2 topic echo /topic_name` displays messages in real-time

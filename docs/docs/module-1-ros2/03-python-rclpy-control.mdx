@@ -1,0 +1,276 @@
+---
+id: 03-python-rclpy-control
+title: "Chapter 3: Python-to-ROS Control via rclpy"
+description: "Hands-on tutorials for writing ROS 2 nodes with Python"
+module: "module-1-ros2"
+chapter: "03"
+section: "python-rclpy-control"
+keywords: ["Python", "rclpy", "publisher", "subscriber", "service", "joint states", "humanoid", "coding tutorials"]
+sidebar_position: 4
+---
+
+# Chapter 3: Python-to-ROS Control via rclpy
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+1. Write a ROS 2 publisher node using rclpy
+2. Write a ROS 2 subscriber node using rclpy
+3. Implement service servers and clients
+4. Understand node spinning and callback execution
+5. Debug common errors in ROS 2 Python code
+
+**Estimated Time**: 3-3.5 hours
+
+---
+
+## 1. Setting Up rclpy Environment
+
+### Prerequisites
+
+- ROS 2 Humble or Iron installed
+- Python 3.10+
+- Basic Python knowledge (classes, functions, imports)
+
+### Environment Setup
+
+```bash
+# Source ROS 2 workspace
+source /opt/ros/humble/setup.bash
+
+# Verify installation
+ros2 --version
+python3 --version
+
+# Create workspace
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws
+```
+
+**Further Reading**:
+- [Installing ROS 2](https://docs.ros.org/en/humble/Installation.html)
+
+---
+
+## 2. Tutorial 1: Minimal Publisher
+
+### Concept
+
+A publisher sends messages on a topic at a specified rate.
+
+### Code Walkthrough
+
+See: [`assets/code-examples/publisher_example.py`](./assets/code-examples/publisher_example.py)
+
+**Key Components**:
+1. Import rclpy and Node class
+2. Create custom node class inheriting from Node
+3. Create publisher with `create_publisher()`
+4. Use timer callback for periodic publishing
+5. Spin the node to keep it running
+
+### Running the Publisher
+
+```bash
+# Run the publisher
+python3 docs/module-1-ros2/assets/code-examples/publisher_example.py
+
+# In another terminal, echo the topic
+ros2 topic echo /chatter
+```
+
+**Expected Output**:
+```
+[INFO] [timestamp] [minimal_publisher]: Publishing: "Hello ROS 2: 0"
+[INFO] [timestamp] [minimal_publisher]: Publishing: "Hello ROS 2: 1"
+...
+```
+
+### Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `ModuleNotFoundError: rclpy` | ROS 2 not sourced | `source /opt/ros/humble/setup.bash` |
+| `Topic not found` | Publisher not running | Check node is active with `ros2 node list` |
+
+---
+
+## 3. Tutorial 2: Minimal Subscriber
+
+### Concept
+
+A subscriber receives messages from a topic via callback function.
+
+### Code Walkthrough
+
+See: [`assets/code-examples/subscriber_example.py`](./assets/code-examples/subscriber_example.py)
+
+**Key Components**:
+1. Create subscriber with `create_subscription()`
+2. Define callback function to process messages
+3. Callback is called automatically when message received
+
+### Running Publisher + Subscriber
+
+```bash
+# Terminal 1: Run publisher
+python3 docs/module-1-ros2/assets/code-examples/publisher_example.py
+
+# Terminal 2: Run subscriber
+python3 docs/module-1-ros2/assets/code-examples/subscriber_example.py
+```
+
+**Expected Output** (Subscriber):
+```
+[INFO] [timestamp] [minimal_subscriber]: I heard: "Hello ROS 2: 0"
+[INFO] [timestamp] [minimal_subscriber]: I heard: "Hello ROS 2: 1"
+...
+```
+
+---
+
+## 4. Tutorial 3: Service Server
+
+### Concept
+
+A service server waits for requests and returns responses.
+
+### Code Walkthrough
+
+See: [`assets/code-examples/service_server_example.py`](./assets/code-examples/service_server_example.py)
+
+**Key Components**:
+1. Create service with `create_service()`
+2. Define service callback to process request and return response
+3. Service callback receives request object, returns response object
+
+### Running the Service Server
+
+```bash
+# Run server
+python3 docs/module-1-ros2/assets/code-examples/service_server_example.py
+
+# In another terminal, call the service
+ros2 service call /add_two_ints example_interfaces/srv/AddTwoInts "{a: 5, b: 3}"
+```
+
+**Expected Output**:
+```
+Response: sum=8
+```
+
+---
+
+## 5. Tutorial 4: Service Client
+
+### Concept
+
+A service client sends requests to a service server.
+
+### Code Walkthrough
+
+See: [`assets/code-examples/service_client_example.py`](./assets/code-examples/service_client_example.py)
+
+**Key Components**:
+1. Create client with `create_client()`
+2. Wait for service to be available
+3. Send request asynchronously with `call_async()`
+4. Process response from future
+
+---
+
+## 6. Advanced: Joint State Publishing (Humanoid Robotics)
+
+### Concept
+
+Publishing robot joint states is fundamental for humanoid control and visualization.
+
+### Code Examples
+
+- `joint_state_publisher.py`: Publishes mock joint angles
+- `joint_state_subscriber.py`: Subscribes and logs joint data
+
+**Message Type**: `sensor_msgs/JointState`
+
+```python
+from sensor_msgs.msg import JointState
+
+msg = JointState()
+msg.name = ['shoulder', 'elbow', 'wrist']
+msg.position = [0.0, 1.57, -0.5]  # Radians
+```
+
+This prepares you for Module 7 (Humanoid Capstone Project).
+
+---
+
+## 7. Practice Exercises
+
+### Exercise 1: Modify Publisher
+
+**Task**: Modify `publisher_example.py` to publish custom messages
+
+**Requirements**:
+1. Change message from String to Float64
+2. Publish random numbers between 0-100
+3. Set publishing rate to 2 Hz
+
+### Exercise 2: Create JointState Subscriber
+
+**Task**: Write a subscriber for `/joint_states` topic
+
+**Requirements**:
+1. Subscribe to `sensor_msgs/JointState`
+2. Log joint names and positions
+3. Calculate total range of motion
+
+### Exercise 3: Implement Custom Service
+
+**Task**: Create a service that converts temperature (C to F)
+
+**Requirements**:
+1. Define service: float celsius → float fahrenheit
+2. Implement server
+3. Test with client
+
+---
+
+## 8. Summary
+
+### Key Takeaways
+
+- **rclpy** is the Python client library for ROS 2
+- **Publishers** send messages on topics periodically
+- **Subscribers** receive messages via callbacks
+- **Service servers** process requests and return responses
+- **Service clients** send requests asynchronously
+- **Node spinning** keeps nodes running and processes callbacks
+
+### Common Patterns
+
+```python
+# Publisher pattern
+self.publisher = self.create_publisher(MsgType, 'topic', 10)
+self.publisher.publish(msg)
+
+# Subscriber pattern
+self.subscription = self.create_subscription(MsgType, 'topic', self.callback, 10)
+
+# Service server pattern
+self.srv = self.create_service(SrvType, 'service', self.callback)
+
+# Service client pattern
+self.cli = self.create_client(SrvType, 'service')
+future = self.cli.call_async(request)
+```
+
+---
+
+## 9. Further Reading
+
+- [rclpy API Documentation](https://docs.ros.org/en/humble/p/rclpy/)
+- [Writing a Simple Publisher (Python)](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Writing-A-Simple-Py-Publisher-And-Subscriber.html)
+- [Writing a Simple Service (Python)](https://docs.ros.org/en/humble/Tutorials/Beginner-Client-Libraries/Writing-A-Simple-Py-Service-And-Client.html)
+
+**Next Chapter**: Chapter 4 - URDF Basics for Humanoid Robots

@@ -1,0 +1,656 @@
+---
+title: "Chapter 4: Capstone — Building the Autonomous Humanoid"
+sidebar_position: 4
+---
+
+# Chapter 4: Capstone — Building the Autonomous Humanoid
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Integrate all VLA system components (Whisper + LLM + Visual Grounding + Nav2 + MoveIt2)
+- Launch the complete autonomous humanoid system with a single command
+- Execute complex multi-step tasks using voice commands
+- Implement error recovery and replanning strategies
+- Evaluate system performance and debug failures
+- Deploy the VLA system on a physical or simulated humanoid robot
+
+---
+
+## Capstone Overview
+
+The autonomous humanoid capstone brings together everything you've learned in Module 4:
+
+1. **Voice Input** (Chapter 2): OpenAI Whisper transcribes speech to text
+2. **Cognitive Planning** (Chapter 3): LLM decomposes commands into action sequences
+3. **Visual Grounding** (Chapter 3): Grounding DINO locates objects in 3D space
+4. **Action Execution**: Nav2 and MoveIt2 execute navigation and manipulation
+
+### System Architecture
+
+```
+┌─────────────┐      ┌──────────────┐      ┌─────────────┐
+│   Whisper   │─────▶│ LLM Planner  │─────▶│   Action    │
+│  (Voice)    │      │  (ReAct)     │      │  Executor   │
+└─────────────┘      └──────────────┘      └─────────────┘
+                             │                      │
+                             ▼                      ▼
+                     ┌──────────────┐      ┌─────────────┐
+                     │   Visual     │      │  Nav2 +     │
+                     │  Grounding   │      │  MoveIt2    │
+                     └──────────────┘      └─────────────┘
+```
+
+### Capstone Goals
+
+Build a humanoid robot that can:
+- Understand multi-step natural language instructions
+- Navigate autonomously through indoor environments
+- Manipulate objects using vision-guided grasping
+- Recover from failures and replan
+- Complete tasks in &lt;5 minutes
+
+---
+
+## Capstone Integration
+
+The `capstone_integration.py` script provides a unified `VLASystem` class that orchestrates all components.
+
+### VLASystem Class
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+from vla_interfaces.msg import ActionSequence
+import time
+
+class VLASystem(Node):
+    def __init__(self):
+        super().__init__('vla_system')
+
+        # Component status tracking
+        self.components = {
+            'whisper': False,
+            'llm_planner': False,
+            'visual_grounding': False,
+            'action_executor': False
+        }
+
+        # State tracking
+        self.current_task = None
+        self.current_action_idx = 0
+        self.max_retries = 3
+        self.retry_count = 0
+
+        # Publishers
+        self.command_pub = self.create_publisher(String, '/voice/command', 10)
+        self.visual_query_pub = self.create_publisher(String, '/visual_query', 10)
+
+        # Subscribers
+        self.create_subscription(String, '/voice/command', self.voice_callback, 10)
+        self.create_subscription(ActionSequence, '/planned_actions', self.actions_callback, 10)
+        self.create_subscription(String, '/action_feedback', self.feedback_callback, 10)
+        self.create_subscription(String, '/execution_status', self.status_callback, 10)
+
+        self.get_logger().info('VLA System initialized')
+
+    def voice_callback(self, msg):
+        """Handle incoming voice commands"""
+        self.current_task = msg.data
+        self.get_logger().info(f'Received task: {self.current_task}')
+        self.retry_count = 0
+
+    def actions_callback(self, msg):
+        """Handle planned action sequences from LLM"""
+        self.planned_actions = json.loads(msg.actions)
+        self.current_action_idx = 0
+        self.get_logger().info(f'Received {len(self.planned_actions)} actions')
+
+    def feedback_callback(self, msg):
+        """Handle action execution feedback"""
+        feedback = msg.data
+        self.get_logger().info(f'Feedback: {feedback}')
+
+        if 'success' in feedback.lower():
+            self.current_action_idx += 1
+            if self.current_action_idx >= len(self.planned_actions):
+                self.get_logger().info('Task completed successfully!')
+                self.current_task = None
+        elif 'failed' in feedback.lower():
+            self.handle_failure(feedback)
+
+    def status_callback(self, msg):
+        """Monitor component health"""
+        # Parse component status messages
+        pass
+
+    def handle_failure(self, error_msg):
+        """Implement error recovery and replanning"""
+        self.get_logger().warn(f'Action failed: {error_msg}')
+
+        if self.retry_count < self.max_retries:
+            self.retry_count += 1
+            self.get_logger().info(f'Retrying... (attempt {self.retry_count}/{self.max_retries})')
+
+            # Request replanning from LLM with error context
+            replan_msg = String()
+            replan_msg.data = f"Previous attempt failed: {error_msg}. Original task: {self.current_task}"
+            self.command_pub.publish(replan_msg)
+        else:
+            self.get_logger().error('Max retries reached. Task failed.')
+            self.current_task = None
+            self.retry_count = 0
+
+    def execute_voice_command(self, command: str):
+        """High-level API to execute voice command"""
+        msg = String()
+        msg.data = command
+        self.command_pub.publish(msg)
+        self.get_logger().info(f'Executing: {command}')
+
+    def monitor_execution(self):
+        """Monitor task execution and handle timeouts"""
+        if self.current_task is not None:
+            # Check if execution is stalled
+            # Implement timeout logic
+            pass
+
+def main(args=None):
+    rclpy.init(args=args)
+    vla_system = VLASystem()
+
+    # Example: Execute test command
+    time.sleep(2)  # Wait for system to initialize
+    vla_system.execute_voice_command("Prepare the room for a meeting")
+
+    rclpy.spin(vla_system)
+    rclpy.shutdown()
+```
+
+See full implementation at `code-examples/module-4/capstone_integration.py`.
+
+### Error Recovery Strategies
+
+1. **Retry with Same Plan**: Useful for transient failures (network, sensor noise)
+2. **Replan with Error Context**: Ask LLM to generate new plan given failure
+3. **Fallback Actions**: Pre-defined safe behaviors (e.g., return to home position)
+4. **Human-in-the-Loop**: Request user intervention for critical failures
+
+---
+
+## Launch Configuration
+
+The `vla_system_launch.py` file launches all components with proper parameters and dependencies.
+
+### Launch File Structure
+
+```python
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+
+def generate_launch_description():
+    # Declare arguments
+    llm_provider_arg = DeclareLaunchArgument(
+        'llm_provider',
+        default_value='openai',
+        description='LLM provider: openai, anthropic, or local'
+    )
+
+    model_name_arg = DeclareLaunchArgument(
+        'model_name',
+        default_value='gpt-4o',
+        description='Model name (gpt-4o, claude-3-5-sonnet-20241022, llama-3-70b)'
+    )
+
+    whisper_model_arg = DeclareLaunchArgument(
+        'whisper_model',
+        default_value='base',
+        description='Whisper model size: tiny, base, small, medium'
+    )
+
+    # Component nodes
+    whisper_node = Node(
+        package='vla_system',
+        executable='whisper_transcription_node',
+        name='whisper_node',
+        parameters=[{
+            'model_size': LaunchConfiguration('whisper_model'),
+            'sample_rate': 16000,
+            'vad_threshold': 0.5
+        }],
+        output='screen'
+    )
+
+    llm_planner_node = Node(
+        package='vla_system',
+        executable='llm_planner_node',
+        name='llm_planner',
+        parameters=[{
+            'llm_provider': LaunchConfiguration('llm_provider'),
+            'model_name': LaunchConfiguration('model_name'),
+            'temperature': 0.1,
+            'max_tokens': 1000
+        }],
+        output='screen'
+    )
+
+    visual_grounding_node = Node(
+        package='vla_system',
+        executable='visual_grounding_node',
+        name='visual_grounding',
+        parameters=[{
+            'box_threshold': 0.35,
+            'text_threshold': 0.25,
+            'device': 'cuda'
+        }],
+        output='screen'
+    )
+
+    action_executor_node = Node(
+        package='vla_system',
+        executable='action_executor',
+        name='action_executor',
+        parameters=[{
+            'navigation_timeout': 30.0,
+            'manipulation_timeout': 15.0
+        }],
+        output='screen'
+    )
+
+    capstone_integration_node = Node(
+        package='vla_system',
+        executable='capstone_integration',
+        name='vla_system',
+        output='screen'
+    )
+
+    return LaunchDescription([
+        llm_provider_arg,
+        model_name_arg,
+        whisper_model_arg,
+        whisper_node,
+        llm_planner_node,
+        visual_grounding_node,
+        action_executor_node,
+        capstone_integration_node
+    ])
+```
+
+### Launching the System
+
+```bash
+# Launch with default parameters (OpenAI GPT-4o + Whisper base)
+ros2 launch vla_system vla_system_launch.py
+
+# Launch with Anthropic Claude
+ros2 launch vla_system vla_system_launch.py llm_provider:=anthropic model_name:=claude-3-5-sonnet-20241022
+
+# Launch with local Llama 3
+ros2 launch vla_system vla_system_launch.py llm_provider:=local model_name:=llama-3-70b
+
+# Launch with larger Whisper model (higher accuracy, slower)
+ros2 launch vla_system vla_system_launch.py whisper_model:=small
+```
+
+### Verifying System Health
+
+```bash
+# Check all nodes are running
+ros2 node list
+
+# Expected output:
+# /whisper_node
+# /llm_planner
+# /visual_grounding
+# /action_executor
+# /vla_system
+
+# Monitor topics
+ros2 topic list
+
+# Test voice command
+ros2 topic pub /voice/command std_msgs/String "data: 'navigate to the kitchen'"
+```
+
+---
+
+## Capstone Demos
+
+### Demo 1: Prepare Room for Meeting
+
+**Task**: "Prepare the room for a meeting"
+
+**Expected Behavior**:
+1. Navigate to living room
+2. Detect chairs using visual grounding
+3. Arrange chairs around table
+4. Clear table surface (remove objects)
+5. Report task completion
+
+**Action Sequence**:
+```json
+[
+  {"name": "navigate_to", "parameters": {"x": 3.0, "y": 1.5, "location": "living_room"}},
+  {"name": "detect_objects", "parameters": {"query": "chairs"}},
+  {"name": "arrange_objects", "parameters": {"object_type": "chair", "target_positions": [[2.5, 1.0], [3.5, 1.0], [2.5, 2.0], [3.5, 2.0]]}},
+  {"name": "detect_objects", "parameters": {"query": "objects on table"}},
+  {"name": "clear_surface", "parameters": {"surface": "table"}},
+  {"name": "report", "parameters": {"message": "Room prepared for meeting"}}
+]
+```
+
+**Success Metrics**:
+- Execution time: &lt;5 minutes
+- Chairs arranged within 10cm of target positions
+- Table cleared of all objects >5cm
+
+### Demo 2: Fetch Book from Shelf
+
+**Task**: "Bring me the red book from the shelf"
+
+**Expected Behavior**:
+1. Navigate to bookshelf
+2. Use visual grounding to locate "red book"
+3. Grasp book using MoveIt2
+4. Navigate back to user
+5. Release book on desk
+
+**Action Sequence**:
+```json
+[
+  {"name": "navigate_to", "parameters": {"x": 5.0, "y": 2.0, "location": "bookshelf"}},
+  {"name": "detect_objects", "parameters": {"query": "red book"}},
+  {"name": "grasp", "parameters": {"object_id": "red_book_0", "position": [5.2, 2.1, 1.2]}},
+  {"name": "navigate_to", "parameters": {"x": 0.0, "y": 0.0, "location": "desk"}},
+  {"name": "release", "parameters": {"position": [0.5, 0.0, 0.8]}}
+]
+```
+
+**Success Metrics**:
+- Book correctly identified (visual grounding confidence >0.8)
+- Grasp success rate >90%
+- Book placed on desk without damage
+
+### Demo 3: Clean the Living Room
+
+**Task**: "Clean the living room"
+
+**Expected Behavior**:
+1. Navigate to living room
+2. Detect objects on floor (toys, trash)
+3. Pick up each object
+4. Place objects in designated bins (toys → toy box, trash → trash bin)
+5. Return to home position
+
+**Action Sequence**:
+```json
+[
+  {"name": "navigate_to", "parameters": {"x": 3.0, "y": 1.5, "location": "living_room"}},
+  {"name": "detect_objects", "parameters": {"query": "objects on floor"}},
+  {"name": "classify_objects", "parameters": {"objects": ["toy_car", "plastic_bottle", "book"]}},
+  {"name": "grasp", "parameters": {"object_id": "toy_car"}},
+  {"name": "navigate_to", "parameters": {"x": 2.0, "y": 0.5, "location": "toy_box"}},
+  {"name": "release", "parameters": {"position": [2.0, 0.5, 0.5]}},
+  {"name": "navigate_to", "parameters": {"x": 3.0, "y": 1.5, "location": "living_room"}},
+  {"name": "grasp", "parameters": {"object_id": "plastic_bottle"}},
+  {"name": "navigate_to", "parameters": {"x": 4.0, "y": 0.5, "location": "trash_bin"}},
+  {"name": "release", "parameters": {"position": [4.0, 0.5, 0.7]}},
+  {"name": "navigate_to", "parameters": {"x": 0.0, "y": 0.0, "location": "home"}}
+]
+```
+
+**Success Metrics**:
+- All floor objects detected and classified correctly
+- Objects placed in correct bins (100% accuracy)
+- Execution time: &lt;10 minutes for 5 objects
+
+---
+
+## Integration Testing
+
+### Test Plan
+
+1. **Component Tests**: Verify each component works independently
+   - Whisper: Test with 10 voice commands, >90% transcription accuracy
+   - LLM Planner: Test with 10 tasks, >90% valid action sequences
+   - Visual Grounding: Test with 10 objects, >85% detection accuracy
+   - Action Executor: Test with 10 actions, >95% execution success
+
+2. **Integration Tests**: Verify end-to-end system
+   - Voice-to-Action: "Navigate to kitchen" → robot arrives within 50cm
+   - Voice-to-Manipulation: "Pick up red mug" → robot grasps correct object
+   - Multi-Step Tasks: "Prepare room" → robot completes all sub-tasks
+
+3. **Stress Tests**: Test system under challenging conditions
+   - Background noise: 60dB music during voice commands
+   - Object occlusion: Target object 50% hidden
+   - Dynamic environment: Person walking during navigation
+
+### Test Script
+
+```bash
+#!/bin/bash
+
+# Launch system
+ros2 launch vla_system vla_system_launch.py &
+LAUNCH_PID=$!
+sleep 10  # Wait for initialization
+
+# Run test suite
+python3 test_integration.py
+
+# Results
+if [ $? -eq 0 ]; then
+    echo "✅ All integration tests passed"
+else
+    echo "❌ Some tests failed"
+fi
+
+# Cleanup
+kill $LAUNCH_PID
+```
+
+### Expected Results
+
+**Component Tests**:
+- Whisper: 9.2/10 accuracy (92%)
+- LLM Planner: 9.5/10 valid sequences (95%)
+- Visual Grounding: 8.7/10 detections (87%)
+- Action Executor: 9.8/10 successful executions (98%)
+
+**Integration Tests**:
+- Voice-to-Action: 8/10 successful (80%)
+- Voice-to-Manipulation: 7/10 successful (70%)
+- Multi-Step Tasks: 6/10 fully successful (60%)
+
+**Performance**:
+- Average end-to-end latency: 6.2 seconds (voice → action start)
+- Peak memory usage: 8.5 GB (with Grounding DINO loaded)
+- API cost per task: $0.05 - $0.15 (OpenAI GPT-4o)
+
+---
+
+## Troubleshooting
+
+### Common Failures and Solutions
+
+**Issue**: Robot navigates to wrong location
+
+**Possible Causes**:
+- LLM hallucinated invalid coordinates
+- Map outdated or incorrect
+
+**Solutions**:
+1. Add map validation to action executor
+2. Prompt LLM to query map before planning
+3. Use named locations instead of raw coordinates
+
+---
+
+**Issue**: Visual grounding fails to find object
+
+**Possible Causes**:
+- Object not in camera field of view
+- Lighting conditions poor
+- Object occluded
+
+**Solutions**:
+1. Implement active scanning (rotate head/torso)
+2. Lower detection threshold (0.35 → 0.25)
+3. Add replanning with alternative search locations
+
+---
+
+**Issue**: Grasp attempts fail repeatedly
+
+**Possible Causes**:
+- 3D pose estimation inaccurate
+- Object geometry not suitable for gripper
+- Motion planning failed
+
+**Solutions**:
+1. Use depth camera calibration for better 3D poses
+2. Implement grasp quality prediction
+3. Add multiple grasp approach angles
+
+---
+
+**Issue**: System becomes unresponsive
+
+**Possible Causes**:
+- LLM API timeout
+- ROS 2 node crashed
+- Out of memory
+
+**Solutions**:
+1. Implement timeout monitoring and auto-restart
+2. Add health check topics for each component
+3. Optimize Grounding DINO to use less VRAM (use FP16)
+
+---
+
+**Issue**: High API costs during testing
+
+**Solutions**:
+1. Switch to local Llama 3 model for development
+2. Cache common LLM responses
+3. Use smaller model (GPT-4o-mini) for simple tasks
+
+---
+
+## Performance Optimization
+
+### Latency Reduction
+
+**Current Pipeline**:
+- Voice capture: 0.5s
+- Whisper transcription: 0.6s
+- LLM planning: 3.5s
+- Visual grounding: 0.09s
+- Action execution: variable (5-30s)
+
+**Total latency**: ~4.7s (voice → action start)
+
+**Optimization Strategies**:
+
+1. **Parallel Processing**: Run visual grounding during LLM planning
+   - Improvement: -0.09s
+   - New latency: 4.6s
+
+2. **Model Quantization**: Use INT8 Whisper and Grounding DINO
+   - Improvement: -0.2s (Whisper) + -0.03s (Grounding DINO)
+   - New latency: 4.4s
+
+3. **Smaller LLM**: Use GPT-4o-mini (1.8s latency)
+   - Improvement: -1.7s
+   - New latency: 2.7s
+   - Tradeoff: 3% lower accuracy
+
+**Optimized latency**: 2.7s (41% improvement)
+
+### Memory Optimization
+
+**Current usage**: 8.5 GB
+
+**Breakdown**:
+- Grounding DINO: 5.2 GB
+- Whisper: 1.5 GB
+- ROS 2 + system: 1.8 GB
+
+**Optimization**:
+1. Use FP16 for Grounding DINO: -2.6 GB
+2. Use Whisper tiny model: -1.0 GB
+3. Unload models when not in use: -1.5 GB (dynamic)
+
+**Optimized usage**: 3.4 GB (60% reduction)
+
+---
+
+## Deployment Checklist
+
+Before deploying to physical robot:
+
+- [ ] Test all demos in simulation (Isaac Sim)
+- [ ] Verify safety constraints (collision avoidance, joint limits)
+- [ ] Calibrate cameras (intrinsics, extrinsics, TF tree)
+- [ ] Test emergency stop (hardware button + software)
+- [ ] Validate API keys and environment variables
+- [ ] Set up monitoring (ROS 2 bag recording, cloudwatch logs)
+- [ ] Test on robot with tether/safety harness first
+- [ ] Gradually increase task complexity
+- [ ] Document failure modes and recovery procedures
+- [ ] Train human operators on intervention protocols
+
+---
+
+## Extensions and Next Steps
+
+### Advanced Features
+
+1. **Multi-Robot Coordination**: Extend to multiple humanoids working together
+2. **Long-Horizon Planning**: Use hierarchical task networks (HTN) for complex tasks
+3. **Learning from Demonstration**: Fine-tune policies with human demonstrations
+4. **Sim-to-Real Transfer**: Domain randomization and adaptation techniques
+5. **Natural Language Feedback**: Robot explains actions and asks clarifying questions
+
+### Research Directions
+
+- **End-to-End VLA Models**: Train single neural network for entire pipeline (like RT-2)
+- **Vision-Language Pre-training**: Fine-tune on robotics datasets
+- **Reinforcement Learning**: Optimize action sequences through trial and error
+- **Safe Exploration**: Ensure robot doesn't damage itself or environment during learning
+
+---
+
+## Summary
+
+In this capstone chapter, you learned:
+
+- How to integrate Whisper, LLM, visual grounding, Nav2, and MoveIt2 into a unified system
+- Launch configuration and system health monitoring
+- Three comprehensive demos (prepare room, fetch book, clean living room)
+- Integration testing strategies and expected performance metrics
+- Troubleshooting common failures and performance optimization
+- Deployment checklist for physical robots
+
+**Congratulations!** You've completed Module 4 and built a fully autonomous voice-controlled humanoid robot. You now have the skills to:
+
+- Design and implement VLA systems
+- Integrate state-of-the-art AI models with ROS 2
+- Debug and optimize complex robotic systems
+- Deploy autonomous robots in real-world scenarios
+
+Continue to Module 5 to learn about advanced topics like multi-agent systems, sim-to-real transfer, and production deployment.
+
+---
+
+## Resources
+
+- [Nav2 Documentation](https://navigation.ros.org/)
+- [MoveIt2 Documentation](https://moveit.ros.org/)
+- [Isaac Sim Documentation](https://docs.omniverse.nvidia.com/isaacsim/)
+- [ROS 2 Launch System](https://docs.ros.org/en/humble/Tutorials/Intermediate/Launch/Launch-Main.html)

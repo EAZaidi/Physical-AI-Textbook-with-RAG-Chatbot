@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  gazebo-fortress:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: physical-ai-gazebo-fortress:latest
+    container_name: gazebo_fortress_module2
+
+    # Environment variables for GUI forwarding
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+
+    # Volume mounts
+    volumes:
+      # X11 socket for GUI
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Workspace directory (shared with host)
+      - ../../:/workspace:rw
+
+    # Network mode: host for ROS 2 communication
+    network_mode: host
+
+    # Privileged mode for hardware access (optional)
+    # privileged: true
+
+    # GPU support (uncomment for NVIDIA GPUs)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+    # Keep container running
+    stdin_open: true
+    tty: true
+
+    # Command: launch bash by default
+    command: /bin/bash

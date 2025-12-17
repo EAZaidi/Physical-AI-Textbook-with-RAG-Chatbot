@@ -1,0 +1,27 @@
+#usda 1.0
+(
+    doc = "Isaac Sim Scene: Warehouse Navigation - Module 3, Chapter 4"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+# This is a placeholder USD file for the warehouse navigation scene
+# Actual scene creation requires Isaac Sim GUI or Python API
+
+# To create this scene properly in Isaac Sim:
+# 1. Open Isaac Sim
+# 2. Create → Environment → Warehouse (or use asset library)
+# 3. Load humanoid URDF with sensors
+# 4. Add obstacles: shelves, boxes, walls
+# 5. Configure lighting (Dome Light intensity: 1000)
+# 6. Set ground plane material (friction: 0.7)
+# 7. Save as .usd file
+
+# Scene elements to include:
+# - Ground plane (50m x 50m)
+# - 20-30 warehouse shelves (procedural placement)
+# - Humanoid robot spawn point (0, 0, 1.0)
+# - Goal marker (15, 5, 0) for visualization
+# - Dome light for photorealistic rendering
+
+# Students: Follow Chapter 4 tutorial to create this scene interactively

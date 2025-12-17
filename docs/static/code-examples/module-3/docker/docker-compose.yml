@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  isaac_ros:
+    build:
+      context: .
+      dockerfile: Dockerfile.isaac_ros
+    image: isaac_ros_module3:latest
+    container_name: isaac_ros_vslam
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    network_mode: host
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./workspace:/workspaces/isaac_ros-dev:rw
+      - ../:/code-examples:ro
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

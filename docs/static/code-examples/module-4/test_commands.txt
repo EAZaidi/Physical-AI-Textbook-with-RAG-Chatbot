@@ -1,0 +1,41 @@
+# Test Commands for VLA System
+# Use these commands to test voice-to-action pipeline
+
+# Navigation Commands
+navigate to the kitchen
+go to the living room
+move to the bedroom
+return to home position
+
+# Manipulation Commands
+pick up the red mug
+grasp the book
+grab the bottle
+place the object on the table
+put down the item
+
+# Perception Commands
+find the blue cup
+detect objects on the table
+look for the remote control
+search for the keys
+
+# Multi-Step Tasks
+bring me the book from the shelf
+prepare the room for a meeting
+clean the living room
+fetch the mug from the kitchen
+open the door and enter
+
+# Complex Tasks
+arrange the chairs around the table
+clear the table surface
+organize the books on the shelf
+set the table for dinner
+tidy up the workspace
+
+# Error Cases (test robustness)
+navigate to the moon
+pick up the invisible object
+do a backflip
+solve world hunger

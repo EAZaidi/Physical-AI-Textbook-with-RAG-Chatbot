@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Qdrant Collection Schema for RAG Embedding Pipeline",
+  "description": "Configuration and payload schema for the rag_embedding collection storing documentation embeddings",
+  "version": "1.0.0",
+  "collection_config": {
+    "collection_name": "rag_embedding",
+    "vector_config": {
+      "size": 1024,
+      "distance": "Cosine",
+      "on_disk": false
+    },
+    "hnsw_config": {
+      "m": 16,
+      "ef_construct": 100,
+      "full_scan_threshold": 10000
+    },
+    "optimizers_config": {
+      "deleted_threshold": 0.2,
+      "vacuum_min_vector_number": 1000,
+      "default_segment_number": 0,
+      "max_segment_size": null,
+      "memmap_threshold": null,
+      "indexing_threshold": 10000,
+      "flush_interval_sec": 5,
+      "max_optimization_threads": 1
+    },
+    "wal_config": {
+      "wal_capacity_mb": 32,
+      "wal_segments_ahead": 0
+    }
+  },
+  "payload_schema": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "format": "uri",
+        "description": "Source page URL for citation and filtering",
+        "index": "keyword",
+        "examples": [
+          "https://physical-ai-humanoid-robotics-textb-ivory.vercel.app/intro"
+        ]
+      },
+      "title": {
+        "type": "string",
+        "description": "Source page title for display in search results",
+        "index": "text",
+        "minLength": 1,
+        "maxLength": 500,
+        "examples": [
+          "Introduction to Physical AI and Humanoid Robotics"
+        ]
+      },
+      "chunk_index": {
+        "type": "integer",
+        "description": "Position of chunk in source page (0-indexed)",
+        "minimum": 0,
+        "examples": [0, 1, 2]
+      },
+      "content": {
+        "type": "string",
+        "description": "Full chunk text content for display",
+        "minLength": 100,
+        "maxLength": 10000,
+        "examples": [
+          "Physical AI systems combine robotics, computer vision, and language models..."
+        ]
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Ingestion timestamp in ISO 8601 format",
+        "examples": [
+          "2025-12-16T10:30:00Z"
+        ]
+      },
+      "content_hash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$",
+        "description": "SHA256 hash of content for duplicate detection",
+        "index": "keyword",
+        "examples": [
+          "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+        ]
+      }
+    },
+    "required": ["url", "title", "chunk_index", "content", "timestamp", "content_hash"],
+    "additionalProperties": false
+  },
+  "point_schema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "integer",
+        "description": "Unique point ID (hash of chunk_id)",
+        "examples": [12345678901234567890]
+      },
+      "vector": {
+        "type": "array",
+        "description": "1024-dimensional embedding from Cohere embed-english-v3.0",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 1024,
+        "maxItems": 1024
+      },
+      "payload": {
+        "$ref": "#/payload_schema"
+      }
+    },
+    "required": ["id", "vector", "payload"]
+  },
+  "indexes": {
+    "url_index": {
+      "field_name": "url",
+      "field_type": "keyword",
+      "description": "Enables exact match filtering by URL"
+    },
+    "content_hash_index": {
+      "field_name": "content_hash",
+      "field_type": "keyword",
+      "description": "Enables duplicate detection queries"
+    }
+  },
+  "usage_examples": {
+    "create_collection": {
+      "description": "Python code to create collection with this schema",
+      "code": "from qdrant_client import QdrantClient\nfrom qdrant_client.models import Distance, VectorParams\n\nclient = QdrantClient(url='http://localhost:6333')\nclient.create_collection(\n    collection_name='rag_embedding',\n    vectors_config=VectorParams(\n        size=1024,\n        distance=Distance.COSINE\n    )\n)"
+    },
+    "upsert_point": {
+      "description": "Insert a vector with payload",
+      "code": "client.upsert(\n    collection_name='rag_embedding',\n    points=[\n        {\n            'id': hash('https://example.com#0'),\n            'vector': embedding_vector,  # List[float] of length 1024\n            'payload': {\n                'url': 'https://example.com',\n                'title': 'Example Page',\n                'chunk_index': 0,\n                'content': 'Example content...',\n                'timestamp': '2025-12-16T10:30:00Z',\n                'content_hash': 'a7ffc6f8...'\n            }\n        }\n    ]\n)"
+    },
+    "search_query": {
+      "description": "Semantic search with URL filtering",
+      "code": "results = client.search(\n    collection_name='rag_embedding',\n    query_vector=query_embedding,  # List[float] of length 1024\n    limit=5,\n    query_filter={\n        'must': [\n            {\n                'key': 'url',\n                'match': {'value': 'https://example.com'}\n            }\n        ]\n    }\n)"
+    },
+    "deduplicate_query": {
+      "description": "Check if content already exists",
+      "code": "import hashlib\n\ncontent_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()\nexisting = client.scroll(\n    collection_name='rag_embedding',\n    scroll_filter={\n        'must': [\n            {\n                'key': 'content_hash',\n                'match': {'value': content_hash}\n            }\n        ]\n    },\n    limit=1\n)\nif existing[0]:  # Duplicate found\n    print('Content already indexed')"
+    }
+  },
+  "estimated_metrics": {
+    "total_vectors": "~1000-2000 (200 pages × 5-10 chunks per page)",
+    "vector_size_bytes": "1024 dimensions × 4 bytes (float32) = 4096 bytes",
+    "payload_size_bytes": "~2000 bytes (URLs, content, metadata)",
+    "total_storage": "~12-24 MB ((4096 + 2000) × 2000 vectors)",
+    "memory_usage": "~50-100 MB (includes HNSW index overhead)",
+    "search_latency": "<50ms for top 5 results (with HNSW index)"
+  },
+  "maintenance": {
+    "backup_recommendation": "Snapshot collection before re-ingestion",
+    "optimization_frequency": "Auto-optimized after 10000 insertions (indexing_threshold)",
+    "deletion_strategy": "Delete by URL filter before re-ingesting updated pages"
+  }
+}

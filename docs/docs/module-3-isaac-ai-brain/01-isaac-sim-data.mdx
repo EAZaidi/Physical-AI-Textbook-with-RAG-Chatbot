@@ -1,0 +1,500 @@
+---
+slug: 01-isaac-sim-data
+---
+
+# Chapter 1: Isaac Sim — Photorealistic Simulation & Synthetic Data
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Install and configure NVIDIA Isaac Sim on Ubuntu 22.04
+- Import humanoid robot URDF models from Module 2 into Isaac Sim
+- Attach and configure RGB cameras, depth cameras, and LiDAR sensors
+- Generate synthetic sensor data (images, depth maps, point clouds) programmatically
+- Record sensor data as ROS 2 rosbags for offline processing
+- Visualize recorded data in RViz2 and validate sensor configurations
+
+## Introduction: Why Synthetic Data?
+
+Building and testing perception algorithms for humanoid robots requires massive amounts of labeled sensor data. Collecting this data from physical robots is:
+
+- **Expensive**: Hardware costs, maintenance, and operator time add up quickly
+- **Time-consuming**: Real-world data collection is limited by robot speed and environment access
+- **Dangerous**: Testing failure modes (falls, collisions) risks damaging expensive hardware
+- **Limited diversity**: Physical environments are constrained by location and setup complexity
+
+**Photorealistic simulation solves these problems** by enabling unlimited data generation in controlled, reproducible environments. NVIDIA Isaac Sim provides:
+
+1. **Physics-accurate simulation**: Realistic sensor noise, lighting, and material properties
+2. **ROS 2 integration**: Native bridge for seamless data streaming to perception stacks
+3. **Scalable data generation**: Parallelize simulations across multiple GPUs
+4. **Domain randomization**: Vary lighting, textures, and object poses for robust training
+
+In this chapter, we'll use Isaac Sim to generate synthetic camera and LiDAR data from the humanoid robot we built in Module 2.
+
+---
+
+## Section 1: Installing Isaac Sim
+
+### Prerequisites
+
+Before installing Isaac Sim, verify your system meets the requirements:
+
+```bash
+# Check Ubuntu version (must be 22.04)
+lsb_release -a
+
+# Check NVIDIA GPU (RTX 3060 or better recommended)
+nvidia-smi
+
+# Check NVIDIA driver version (525+ required)
+nvidia-smi | grep "Driver Version"
+```
+
+### Step 1: Download NVIDIA Omniverse Launcher
+
+Isaac Sim is distributed through the NVIDIA Omniverse platform:
+
+1. Visit: [https://www.nvidia.com/en-us/omniverse/download/](https://www.nvidia.com/en-us/omniverse/download/)
+2. Download **Omniverse Launcher** for Linux
+3. Make the AppImage executable and launch:
+
+```bash
+chmod +x omniverse-launcher-linux.AppImage
+./omniverse-launcher-linux.AppImage
+```
+
+### Step 2: Install Isaac Sim via Launcher
+
+1. Open Omniverse Launcher (first launch takes 2-3 minutes)
+2. Navigate to the **Exchange** tab
+3. Search for **"Isaac Sim"**
+4. Click **Install** for version **2023.1.1** or newer
+5. Wait for installation (~15GB download, 30-45 minutes)
+
+### Step 3: Verify Installation
+
+Launch Isaac Sim from the Omniverse Launcher:
+
+```bash
+# Or launch from command line (adjust path if needed)
+~/.local/share/ov/pkg/isaac_sim-2023.1.1/isaac-sim.sh
+```
+
+**Expected result**: Isaac Sim GUI opens with the default scene. You should see a viewport, content browser, and stage hierarchy panel.
+
+:::tip
+Isaac Sim first launch takes 2-3 minutes as it initializes Vulkan shaders. Subsequent launches are faster (~30 seconds).
+:::
+
+---
+
+## Section 2: Loading Humanoid URDF
+
+Now that Isaac Sim is installed, let's import the humanoid robot URDF we created in Module 2.
+
+### Method 1: GUI Import (Recommended for First Time)
+
+1. In Isaac Sim, go to **Isaac Utils → URDF Importer**
+2. Click **Select URDF File** and navigate to your Module 2 robot:
+   ```
+   /path/to/your/humanoid.urdf
+   ```
+3. Configure import settings:
+   - **Import Joint Drives**: ✅ Enabled (for actuator simulation)
+   - **Fix Base**: ❌ Disabled (humanoid has floating base)
+   - **Self Collision**: ✅ Enabled
+4. Click **Import**
+
+The robot should appear in the viewport. Use **middle-mouse drag** to rotate the view and inspect the model.
+
+### Method 2: Programmatic Import (For Automation)
+
+For batch processing or automated workflows, use Python scripting:
+
+```python title="/static/code-examples/module-3/isaac_sim_load_robot.py"
+import omni
+from omni.isaac.core import World
+from omni.isaac.core.utils.extensions import enable_extension
+from omni.importer.urdf import _urdf
+
+# Enable URDF extension
+enable_extension("omni.importer.urdf")
+
+# Create simulation world
+world = World(stage_units_in_meters=1.0)
+
+# Import URDF
+urdf_path = "/path/to/your/humanoid.urdf"
+robot_prim_path = "/World/humanoid"
+
+importer = _urdf.acquire_urdf_interface()
+import_config = _urdf.ImportConfig()
+import_config.merge_fixed_joints = False
+import_config.fix_base = False  # Floating base for humanoid
+import_config.import_inertia_tensor = True
+import_config.self_collision = True
+
+success = importer.parse_and_import_urdf(
+    urdf_path, robot_prim_path, import_config
+)
+
+if success:
+    print(f"✅ Robot loaded successfully at {robot_prim_path}")
+else:
+    print("❌ Failed to load URDF")
+
+# Play simulation
+world.play()
+```
+
+**Run the script** inside Isaac Sim's Script Editor (**Window → Script Editor**) or via command line with Isaac Sim's Python:
+
+```bash
+~/.local/share/ov/pkg/isaac_sim-2023.1.1/python.sh isaac_sim_load_robot.py
+```
+
+:::caution Common Import Errors
+- **Missing meshes**: Ensure all `.stl` or `.dae` files referenced in URDF are in the correct paths
+- **Unsupported joint types**: Continuous joints may need conversion to revolute with limits
+- **Collision mesh errors**: Verify collision geometry is valid (non-zero volume)
+:::
+
+---
+
+## Section 3: Attaching Sensors
+
+Isaac Sim supports a variety of sensors for robotics applications. We'll attach:
+1. **RGB Camera**: Color images for visual SLAM
+2. **Depth Camera**: Depth maps for obstacle detection
+3. **LiDAR**: 3D point clouds for navigation
+
+### Attaching a Stereo Camera Pair (For VSLAM)
+
+Visual SLAM requires stereo cameras. We'll attach left and right cameras to the robot's head link.
+
+**GUI Method**:
+1. Select the robot's **head_link** in the Stage panel
+2. Go to **Create → Camera**
+3. Rename to `camera_left`
+4. Set transform:
+   - **Position**: `(0.05, 0.03, 0.1)` (5cm forward, 3cm left, 10cm up)
+   - **Rotation**: `(0, 0, 0)`
+5. Repeat for `camera_right` with position `(0.05, -0.03, 0.1)` (3cm right instead)
+
+**Programmatic Method**:
+
+```python title="/static/code-examples/module-3/isaac_sim_sensor_config.py"
+from omni.isaac.sensor import Camera
+import omni.isaac.core.utils.prims as prim_utils
+
+# Attach left camera
+camera_left = Camera(
+    prim_path="/World/humanoid/head_link/camera_left",
+    frequency=30,  # 30 Hz
+    resolution=(1280, 720),
+    orientation=[0, 0, 0, 1],  # quaternion (w, x, y, z)
+)
+camera_left.set_focal_length(5.0)  # mm
+camera_left.set_focus_distance(1.0)  # meters
+camera_left.set_horizontal_aperture(20.955)  # mm (D435i spec)
+
+# Attach right camera (baseline = 6cm for stereo)
+camera_right = Camera(
+    prim_path="/World/humanoid/head_link/camera_right",
+    frequency=30,
+    resolution=(1280, 720),
+    orientation=[0, 0, 0, 1],
+)
+camera_right.set_focal_length(5.0)
+camera_right.set_horizontal_aperture(20.955)
+
+# Configure intrinsics to match RealSense D435i
+# Focal length: ~615 px (for 1280x720)
+# Principal point: (640, 360)
+
+print("✅ Stereo cameras attached")
+```
+
+### Attaching a LiDAR Sensor
+
+For 3D mapping and obstacle detection:
+
+1. Select **base_link** in Stage panel
+2. Go to **Create → Isaac → Sensors → Lidar → Rotating Lidar**
+3. Configure parameters:
+   - **Horizontal FOV**: 360° (full rotation)
+   - **Vertical FOV**: 30° (±15°)
+   - **Range**: 30 meters
+   - **Rotation Rate**: 10 Hz
+
+---
+
+## Section 4: Recording Sensor Data
+
+Now that sensors are attached, let's configure the ROS 2 bridge to publish sensor data as ROS 2 topics.
+
+### Step 1: Enable ROS 2 Bridge Extension
+
+1. **Window → Extensions**
+2. Search for **"ROS2 Bridge"**
+3. Enable **omni.isaac.ros2_bridge**
+4. Wait for extension to load (status bar shows "Ready")
+
+### Step 2: Configure OmniGraph for Sensor Publishing
+
+OmniGraph is Isaac Sim's visual scripting system for data flow:
+
+1. **Window → Visual Scripting → Action Graph**
+2. Click **+** to create new graph, name it `ROS2_SensorPublisher`
+3. Add nodes (right-click canvas):
+   - **On Playback Tick** (trigger)
+   - **ROS2 Context** (manages ROS 2 connection)
+   - **ROS2 Camera Helper** (publishes camera images + CameraInfo)
+   - **ROS2 Publish Point Cloud** (publishes LiDAR data)
+
+4. Connect nodes:
+   ```
+   On Playback Tick → ROS2 Camera Helper (Exec In)
+   ROS2 Context → ROS2 Camera Helper (Context)
+   Camera Prim Path: /World/humanoid/head_link/camera_left
+   Topic Name: /camera/left/image_raw
+   ```
+
+5. Repeat for right camera and LiDAR
+
+### Step 3: Record Rosbag
+
+With ROS 2 bridge active, verify topics are publishing:
+
+```bash
+# In a terminal (outside Isaac Sim)
+ros2 topic list
+# Should see:
+#   /camera/left/image_raw
+#   /camera/right/image_raw
+#   /camera/left/camera_info
+#   /camera/right/camera_info
+#   /scan (LiDAR)
+```
+
+Record data for offline processing:
+
+```bash title="/static/code-examples/module-3/record_isaac_data.sh"
+#!/bin/bash
+
+# Record 60 seconds of sensor data
+ros2 bag record -o isaac_sim_demo \
+  /camera/left/image_raw \
+  /camera/right/image_raw \
+  /camera/left/camera_info \
+  /camera/right/camera_info \
+  /scan \
+  /tf \
+  /tf_static \
+  --duration 60
+
+echo "✅ Recorded 60 seconds to isaac_sim_demo/"
+```
+
+Make the script executable and run:
+
+```bash
+chmod +x record_isaac_data.sh
+./record_isaac_data.sh
+```
+
+**While recording**, move the robot in Isaac Sim (or let it fall/walk) to capture varied poses.
+
+---
+
+## Section 5: Visualizing Data
+
+Let's verify the recorded data in RViz2:
+
+### Step 1: Play Back Rosbag
+
+```bash
+ros2 bag play isaac_sim_demo
+```
+
+### Step 2: Launch RViz2
+
+```bash
+ros2 run rviz2 rviz2
+```
+
+### Step 3: Add Visualizations
+
+1. **Add → Image** display:
+   - Topic: `/camera/left/image_raw`
+2. **Add → PointCloud2** display:
+   - Topic: `/scan`
+   - Style: Points
+   - Color: Intensity
+3. **Add → TF** display (to see robot skeleton)
+4. Set **Fixed Frame** to `base_link`
+
+**Expected result**: You should see live camera images and LiDAR point clouds updating as the rosbag plays.
+
+:::tip Saving RViz Config
+**File → Save Config As** → Save to `vslam_visualization.rviz` for reuse in Chapter 2.
+:::
+
+---
+
+## Exercises
+
+Complete these hands-on tasks to reinforce your learning:
+
+### Exercise 1: Sensor Pose Tuning
+**Task**: Adjust camera positions to increase stereo baseline to 10cm (from 6cm).
+
+**Steps**:
+1. Modify camera positions in Isaac Sim or Python script
+2. Record new rosbag
+3. Compare stereo disparity quality (wider baseline = better depth accuracy)
+
+**Validation**: Run `ros2 topic echo /camera/left/camera_info` and verify baseline changed.
+
+### Exercise 2: Lighting Variation
+**Task**: Capture data under 3 different lighting conditions (bright, dim, shadows).
+
+**Steps**:
+1. In Isaac Sim, add **Dome Light** (Create → Light → Dome Light)
+2. Vary intensity: 1000 (bright), 300 (dim), 100 (dark)
+3. Record rosbags for each condition
+
+**Validation**: Compare image brightness in RViz2. Dim lighting should challenge VSLAM in Chapter 2.
+
+### Exercise 3: Multi-Sensor Sync
+**Task**: Verify camera and LiDAR timestamps are synchronized.
+
+**Steps**:
+1. Play back rosbag
+2. Run: `ros2 topic echo /camera/left/image_raw --field header.stamp`
+3. Run: `ros2 topic echo /scan --field header.stamp`
+4. Compare timestamps (should differ by &lt;10ms)
+
+**Validation**: Time-synchronized sensors prevent drift in sensor fusion.
+
+### Exercise 4: Export Static Images
+**Task**: Save 10 RGB images from the rosbag to files.
+
+**Steps**:
+```bash
+ros2 bag play isaac_sim_demo
+ros2 run image_view extract_images \
+  _sec_per_frame:=0.1 \
+  image:=/camera/left/image_raw
+```
+
+**Validation**: Check `frames/*.jpg` directory for exported images.
+
+---
+
+## Troubleshooting
+
+### Issue: Isaac Sim Crashes on Launch (Black Screen)
+
+**Symptom**: Window opens but viewport remains black, or app crashes.
+
+**Solutions**:
+1. **Update NVIDIA driver**:
+   ```bash
+   ubuntu-drivers devices
+   sudo ubuntu-drivers autoinstall
+   sudo reboot
+   ```
+2. **Verify Vulkan support**:
+   ```bash
+   vulkaninfo | grep "GPU"
+   # Should show your GPU model
+   ```
+3. **Check GPU is not in use** (kill other GPU processes):
+   ```bash
+   nvidia-smi  # Look for processes using GPU
+   kill <PID>  # Kill conflicting processes
+   ```
+
+### Issue: URDF Import Fails ("Mesh Not Found")
+
+**Symptom**: Isaac Sim reports missing `.stl` or `.dae` files.
+
+**Solution**:
+1. Verify mesh paths in URDF are **relative** or **absolute**:
+   ```xml
+   <mesh filename="package://my_robot/meshes/base.stl"/>  <!-- ✅ Relative -->
+   <mesh filename="/home/user/robot/meshes/base.stl"/>     <!-- ✅ Absolute -->
+   ```
+2. Copy all mesh files to the same directory as URDF
+3. Update URDF paths accordingly
+
+### Issue: ROS 2 Topics Not Visible
+
+**Symptom**: `ros2 topic list` shows no Isaac Sim topics.
+
+**Solutions**:
+1. **Check ROS 2 Bridge is enabled** (Extensions panel should show green checkmark)
+2. **Verify ROS_DOMAIN_ID matches**:
+   ```bash
+   echo $ROS_DOMAIN_ID  # Must match Isaac Sim setting (default: 0)
+   ```
+3. **Restart ROS 2 daemon**:
+   ```bash
+   ros2 daemon stop
+   ros2 daemon start
+   ```
+4. **Use CycloneDDS** (FastDDS sometimes has discovery issues):
+   ```bash
+   sudo apt install ros-humble-rmw-cyclonedds-cpp
+   export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+   ```
+
+### Issue: Low Frame Rate (&lt;10 FPS)
+
+**Symptom**: Simulation runs slowly, sensors publish at &lt;30 Hz.
+
+**Solutions**:
+1. **Reduce rendering quality**: Edit → Preferences → Rendering → Quality: Low
+2. **Disable real-time mode**: Toolbar → Real-time toggle (off)
+3. **Check GPU usage**:
+   ```bash
+   watch -n 1 nvidia-smi
+   # GPU utilization should be >80% during simulation
+   ```
+
+---
+
+## Summary & Next Steps
+
+In this chapter, you learned to:
+
+✅ Install NVIDIA Isaac Sim via Omniverse Launcher
+✅ Import humanoid URDF models into photorealistic simulation
+✅ Attach stereo cameras and LiDAR sensors programmatically
+✅ Configure ROS 2 bridge for sensor data streaming
+✅ Record rosbags with synthetic RGB, depth, and point cloud data
+✅ Visualize recorded data in RViz2
+
+**Key Takeaway**: Isaac Sim enables unlimited, physics-accurate synthetic data generation for robotics perception—critical for training robust SLAM and navigation algorithms without expensive hardware.
+
+### What's Next?
+
+In **Chapter 2: Isaac ROS VSLAM**, we'll use the synthetic camera data recorded here to:
+- Set up GPU-accelerated Visual SLAM in Docker
+- Process stereo images in real-time (>20 FPS on RTX 3060)
+- Build 3D maps and estimate robot poses
+- Integrate live Isaac Sim data with Isaac ROS perception pipeline
+
+Continue to [Chapter 2 →](./02-isaac-ros-vslam)
+
+---
+
+## Additional Resources
+
+- **Isaac Sim Documentation**: [https://docs.omniverse.nvidia.com/isaacsim/latest/](https://docs.omniverse.nvidia.com/isaacsim/latest/)
+- **ROS 2 Bridge Tutorial**: [https://docs.omniverse.nvidia.com/isaacsim/latest/ros2_tutorials/index.html](https://docs.omniverse.nvidia.com/isaacsim/latest/ros2_tutorials/index.html)
+- **URDF Importer Guide**: [https://docs.omniverse.nvidia.com/isaacsim/latest/features/external_importer/ext_usd_importer_urdf.html](https://docs.omniverse.nvidia.com/isaacsim/latest/features/external_importer/ext_usd_importer_urdf.html)
+- **Sensor Simulation**: [https://docs.omniverse.nvidia.com/isaacsim/latest/features/sensors_simulation/index.html](https://docs.omniverse.nvidia.com/isaacsim/latest/features/sensors_simulation/index.html)

@@ -1,0 +1,38 @@
+name: Test ROS 2 Code Examples
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - 'docs/module-1-ros2/assets/code-examples/**'
+      - 'docker/ros2-testing/**'
+      - 'scripts/test-code-examples.sh'
+      - '.github/workflows/test-code-examples.yml'
+  pull_request:
+    branches: ["master", "main"]
+
+jobs:
+  test-code-examples:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ROS 2 testing Docker image
+        run: |
+          docker build -t ros2-module1-testing -f docker/ros2-testing/Dockerfile .
+
+      - name: Run code example tests
+        run: |
+          chmod +x scripts/test-code-examples.sh
+          ./scripts/test-code-examples.sh
+
+      - name: Test results summary
+        if: always()
+        run: |
+          echo "Code examples test completed"
+          echo "Check logs above for details"

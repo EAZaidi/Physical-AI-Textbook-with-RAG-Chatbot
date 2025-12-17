@@ -1,0 +1,18 @@
+#usda 1.0
+(
+    doc = "Isaac Sim Scene: Humanoid Robot with Sensors - Module 3, Chapter 1"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+# This is a placeholder USD file
+# Actual scene creation requires Isaac Sim GUI or Python API
+
+# To create this scene properly:
+# 1. Open Isaac Sim
+# 2. Load humanoid URDF
+# 3. Attach sensors (cameras, LiDAR)
+# 4. Add environment (ground plane, lighting)
+# 5. Save as .usd file
+
+# Students: Follow Chapter 1 tutorial to create this scene interactively

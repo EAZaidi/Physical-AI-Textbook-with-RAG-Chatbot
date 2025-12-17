@@ -1,0 +1,217 @@
+---
+title: "Module 1 Overview"
+description: "Master the fundamentals of ROS 2 for humanoid robotics"
+sidebar_position: 0
+---
+
+# Module 1: The Robotic Nervous System (ROS 2)
+
+## Overview
+
+Welcome to **Module 1** of the Physical AI & Humanoid Robotics learning path! In this module, you'll master the **Robot Operating System 2 (ROS 2)**, the middleware that powers modern humanoid robots from research labs to production systems.
+
+Just as the nervous system coordinates complex movements in biological organisms, ROS 2 serves as the **communication backbone** for robotic systems—enabling sensors, actuators, planning algorithms, and control systems to work together seamlessly.
+
+**Why ROS 2 Matters for Humanoid Robotics**:
+- **Industry Standard**: Used by Boston Dynamics, Agility Robotics, Figure AI, and Tesla Optimus teams
+- **Distributed Architecture**: Peer-to-peer communication enables complex multi-node systems
+- **Real-Time Capable**: DDS middleware supports deterministic communication for safety-critical applications
+- **Modular Design**: Build and test individual components independently before integration
+
+---
+
+## Learning Objectives
+
+By completing this module, you will be able to:
+
+1. **Understand ROS 2 Architecture** (Chapter 1-2)
+   - Explain the ROS 2 computation graph (nodes, topics, services, actions)
+   - Differentiate between ROS 1 and ROS 2 design philosophies
+   - Identify when to use topics vs. services for robotic communication
+
+2. **Write Production-Grade ROS 2 Nodes** (Chapter 3)
+   - Create publishers and subscribers in Python using `rclpy`
+   - Implement service servers and clients for request/response patterns
+   - Configure QoS profiles for reliable sensor data streaming
+
+3. **Model Humanoid Robots with URDF** (Chapter 4)
+   - Read and interpret URDF kinematic trees for humanoid structures
+   - Modify URDF files to add sensors (cameras, LiDAR) to robot models
+   - Visualize and validate robot models in RViz2
+
+4. **Apply to Real Projects** (Capstone Preparation)
+   - Use ROS 2 patterns in Module 7's humanoid robotics capstone
+   - Build modular, testable robotics software following industry best practices
+
+---
+
+## Module Structure
+
+### [Chapter 1: ROS 2 Overview & Architecture](01-overview-architecture)
+**Estimated Time**: ~1.5 hours
+
+- Introduction to ROS 2 ecosystem
+- ROS 1 vs. ROS 2 comparison
+- DDS middleware and QoS profiles
+- Computation graph fundamentals
+
+**Prerequisites**: Basic command-line familiarity
+
+---
+
+### [Chapter 2: Nodes, Topics & Services](02-nodes-topics-services)
+**Estimated Time**: ~2 hours
+
+- Deep dive into nodes (lifecycle, composition)
+- Topics for continuous data streams
+- Services for request/response patterns
+- Actions for long-running tasks
+- Communication pattern decision-making
+
+**Prerequisites**: Chapter 1 completion
+
+---
+
+### [Chapter 3: Python Programming with rclpy](03-python-rclpy-control)
+**Estimated Time**: ~3 hours
+
+- Hands-on publisher/subscriber tutorials
+- Service server/client implementation
+- Joint state publishing for humanoid robots
+- Error handling and debugging
+- Testing ROS 2 nodes
+
+**Prerequisites**: Python 3.10+ basics, Chapter 2 completion
+
+---
+
+### [Chapter 4: URDF Basics for Humanoid Robots](04-urdf-basics)
+**Estimated Time**: ~2 hours
+
+- URDF structure (links, joints, kinematic trees)
+- Reading and modifying robot descriptions
+- Adding sensors to robot models
+- Visualization in RViz2
+- Troubleshooting common URDF errors
+
+**Prerequisites**: Basic XML understanding, Chapter 1-3 completion
+
+---
+
+## Estimated Total Time
+
+**8-9 hours** (including exercises and practice)
+
+**Recommended Pace**:
+- **Week 1**: Chapters 1-2 (theory and architecture)
+- **Week 2**: Chapter 3 (hands-on coding)
+- **Week 3**: Chapter 4 (URDF modeling)
+
+---
+
+## Prerequisites
+
+### Required Knowledge
+- **Programming**: Python 3.10+ (functions, classes, basic OOP)
+- **Command Line**: Navigating directories, running scripts
+- **Development Tools**: Text editor or IDE (VS Code recommended)
+
+### Required Software
+- **Operating System**: Ubuntu 22.04 LTS (or Docker alternative)
+- **ROS 2 Distribution**: Humble Hawksbill or Iron Irwini
+- **Python**: 3.10 or later
+- **Docker** (optional): For containerized testing environment
+
+**Setup Guide**: See [Environment Setup](03-python-rclpy-control#environment-setup) in Chapter 3
+
+---
+
+## Learning Resources
+
+### Official Documentation
+- [ROS 2 Documentation](https://docs.ros.org/en/humble/)
+- [ROS 2 Design Documents](https://design.ros2.org/)
+- [rclpy API Reference](https://docs.ros2.org/latest/api/rclpy/)
+
+### Code Examples
+All code examples in this module are:
+- **Tested**: Validated in Docker with ROS 2 Humble
+- **Reproducible**: See `docker/ros2-testing/` for testing environment
+- **Production-Ready**: Follow ROS 2 best practices and style guidelines
+
+Find all examples in [`docs/module-1-ros2/assets/code-examples/`](./assets/code-examples/)
+
+---
+
+## How to Use This Module
+
+### 1. Read Sequentially
+Chapters build on each other. Start with Chapter 1 and progress linearly.
+
+### 2. Run Code Examples
+Don't just read—**type and run** every code example. Muscle memory matters!
+
+```bash
+# Example: Test publisher/subscriber
+ros2 run <package> publisher_example
+ros2 run <package> subscriber_example
+```
+
+### 3. Complete Exercises
+Each chapter includes hands-on exercises. Complete them to reinforce learning.
+
+### 4. Experiment and Break Things
+- Modify code examples and observe behavior
+- Intentionally introduce errors to understand debugging
+- Use `ros2 topic list`, `ros2 node info`, and other CLI tools extensively
+
+### 5. Follow Best Practices
+This module adheres to educational best practices:
+- **Source Accuracy**: All ROS 2 info sourced from official docs
+- **Educational Clarity**: Concepts explained with humanoid robotics context
+- **Reproducibility**: All code tested in standardized Docker environment
+
+---
+
+## Assessment & Self-Check
+
+### Chapter-Level Self-Checks
+Each chapter ends with self-check questions. Answer these **without** looking back at the material to test retention.
+
+### Module-Level Mastery
+You've mastered Module 1 when you can:
+- [ ] Explain the ROS 2 computation graph to a peer
+- [ ] Write a publisher/subscriber pair from memory
+- [ ] Read a URDF file and visualize the robot mentally
+- [ ] Debug common ROS 2 errors using CLI tools
+- [ ] Choose appropriate communication patterns (topic vs. service) for a given scenario
+
+---
+
+## Next Steps
+
+**After completing Module 1**, you'll be ready for:
+
+- **Module 2**: Simulation Environments (Gazebo, Unity, Isaac Sim)
+- **Module 3**: Motion Planning & Control
+- **Module 7**: Humanoid Robotics Capstone Project
+
+All future modules assume **mastery of Module 1 concepts**. Take your time and build a solid foundation!
+
+---
+
+## Getting Help
+
+### Troubleshooting
+- Check chapter-specific troubleshooting sections
+- Review [ROS 2 Common Issues](https://docs.ros.org/en/humble/Troubleshooting.html)
+- Use `ros2 doctor` to diagnose system issues
+
+### Community Resources
+- [ROS Discourse](https://discourse.ros.org/)
+- [ROS Answers](https://answers.ros.org/)
+- [Robotics Stack Exchange](https://robotics.stackexchange.com/)
+
+---
+
+**Ready to begin?** Start with [Chapter 1: ROS 2 Overview & Architecture →](01-overview-architecture)

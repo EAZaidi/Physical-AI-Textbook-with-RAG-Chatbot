@@ -1,0 +1,41 @@
+# Git
+.git/
+.gitignore
+
+# Node.js / Docusaurus
+node_modules/
+npm-debug.log*
+.docusaurus/
+build/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env*
+
+# Logs
+*.log
+logs/
+
+# Documentation build artifacts
+.cache/
+coverage/
+
+# Keep Dockerfile itself out
+Dockerfile*
+.dockerignore
+
+# Specs and planning (not needed in container)
+specs/
+.specify/
+history/

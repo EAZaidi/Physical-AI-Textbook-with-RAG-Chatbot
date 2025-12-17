@@ -1,0 +1,8 @@
+{
+  "label": "Module 1: The Robotic Nervous System (ROS 2)",
+  "position": 1,
+  "link": {
+    "type": "generated-index",
+    "description": "Learn the fundamentals of ROS 2 (Robot Operating System 2) - the communication framework that connects sensors, actuators, and AI algorithms in modern robotics."
+  }
+}

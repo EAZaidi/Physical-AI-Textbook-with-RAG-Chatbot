@@ -1,0 +1,48 @@
+# Module 4: Vision-Language-Action (VLA) Dependencies
+# Python 3.10+ required
+
+# Speech-to-Text (Whisper)
+faster-whisper>=0.10.0
+openai-whisper>=20231117
+sounddevice>=0.4.6
+webrtcvad>=2.0.10
+
+# LLM APIs
+openai>=1.0.0
+anthropic>=0.18.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-anthropic>=0.1.0
+
+# Local LLM Support (optional)
+transformers>=4.30.0
+accelerate>=0.20.0
+torch>=2.0.0
+bitsandbytes>=0.41.0
+
+# Visual Grounding
+# Note: Grounding DINO requires separate installation from GitHub
+# git clone https://github.com/IDEA-Research/GroundingDINO.git
+# cd GroundingDINO && pip install -e .
+
+# Computer Vision
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# ROS 2 Python Libraries
+# Note: Install ROS 2 Humble via apt, these are additional Python packages
+# rclpy, std_msgs, geometry_msgs, nav2_msgs, vision_msgs installed via ROS 2
+
+# Utilities
+numpy>=1.24.0
+scipy>=1.10.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Audio Processing
+librosa>=0.10.0
+noisereduce>=3.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0

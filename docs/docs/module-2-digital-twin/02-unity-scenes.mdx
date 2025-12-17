@@ -1,0 +1,499 @@
+---
+title: "Chapter 2: High-Fidelity Visual Environments with Unity"
+description: "Create realistic 3D scenes for robot perception and visualization"
+sidebar_position: 2
+---
+
+import CodeBlock from '@theme/CodeBlock';
+
+# Chapter 2: High-Fidelity Visual Environments with Unity
+
+## 2.1 Introduction
+
+While Gazebo excels at physics-accurate simulation, its rendering capabilities are limited. **Unity**—a professional game engine—provides photorealistic graphics, advanced lighting, and high-performance rendering. This makes Unity ideal for:
+
+- **Vision algorithm development**: Test object detection, semantic segmentation, visual SLAM
+- **Human-robot interaction (HRI)**: Create realistic environments for user studies
+- **Stakeholder demonstrations**: High-quality renders for presentations and publications
+- **Synthetic dataset generation**: Rendered images with perfect ground-truth labels
+
+Unity is not a replacement for Gazebo—it complements it. Typical workflow:
+1. **Gazebo**: Develop and validate control algorithms (physics-accurate)
+2. **Unity**: Test perception pipelines (realistic sensors and environments)
+3. **Hardware**: Deploy after simulation validation
+
+### Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+1. Install Unity 2022.3 LTS with Unity Robotics Hub packages
+2. Create interactive 3D scenes with realistic lighting and materials
+3. Import URDF humanoid models using the URDF Importer
+4. Configure Unity's ArticulationBody system for robot physics
+5. Implement camera controls and physics interactions with C# scripts
+6. Optimize scenes for real-time performance (60+ FPS)
+
+### Unity vs. Gazebo: When to Use Each
+
+| Feature | Gazebo | Unity |
+|---------|--------|-------|
+| **Physics accuracy** | Excellent (ODE, Bullet, DART) | Good (PhysX, limited tuning) |
+| **Visual fidelity** | Basic (OGRE renderer) | Excellent (URP/HDRP pipelines) |
+| **Sensor simulation** | LiDAR, IMU, cameras (via plugins) | Virtual cameras, raycasts |
+| **Robot import** | Native URDF support | URDF Importer package |
+| **Performance** | 30-100 FPS (depends on complexity) | 60-240 FPS (GPU-optimized) |
+| **Best for** | Control development, dynamics | Perception, visualization |
+
+**Use both**: Export physics state from Gazebo → visualize in Unity (via ROS TCP Connector).
+
+---
+
+## 2.2 Unity Setup and Project Creation
+
+### System Requirements
+
+- **OS**: Windows 10/11, macOS 12+, or Ubuntu 20.04/22.04
+- **GPU**: DirectX 11/12 (Windows), Metal (macOS), Vulkan (Linux)
+  - Minimum: GTX 1050 / RX 560
+  - Recommended: GTX 1060 6GB / RX 580 8GB or better
+- **RAM**: 8 GB minimum, 16 GB recommended
+- **Disk Space**: 10 GB for Unity Editor + project
+
+### Installation Steps
+
+#### 1. Install Unity Hub
+
+Download from [unity.com/download](https://unity.com/download):
+- **Windows/macOS**: Run installer
+- **Linux**: Use AppImage or snap
+
+```bash
+# Linux (snap)
+sudo snap install unity-hub --classic
+```
+
+Launch Unity Hub and create an account (free Personal license).
+
+#### 2. Install Unity 2022.3 LTS
+
+In Unity Hub:
+1. Click **Installs** (left sidebar)
+2. Click **Install Editor** → Select **2022.3 LTS** (latest patch, e.g., 2022.3.50f1)
+3. Check modules:
+   - **Visual Studio Community** (Windows) or **Visual Studio for Mac** (macOS)
+   - **Linux Build Support** (if cross-platform)
+   - **Documentation** (recommended)
+
+**Installation time**: 15-30 minutes.
+
+![Unity Hub with 2022.3 LTS installed](./assets/screenshots/02-unity-hub.png)
+
+#### 3. Create New Project
+
+1. Unity Hub → **New Project**
+2. Select **3D (URP)** template (Universal Render Pipeline for best performance)
+3. Configure:
+   - **Project Name**: `HumanoidRobotDigitalTwin`
+   - **Location**: Choose directory
+   - **Unity Version**: 2022.3.x LTS
+4. Click **Create Project**
+
+**First launch**: 2-5 minutes to import packages and compile.
+
+![Empty Unity project (SampleScene)](./assets/screenshots/02-empty-project.png)
+
+#### 4. Install Unity Robotics Hub Packages
+
+Open **Package Manager** (`Window → Package Manager`):
+
+1. Click **+** (top left) → **Add package from git URL**
+2. Enter:
+   ```
+   https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector
+   ```
+   Wait for installation (~1 minute).
+
+3. Repeat for URDF Importer:
+   ```
+   https://github.com/Unity-Technologies/URDF-Importer.git?path=/com.unity.robotics.urdf-importer
+   ```
+
+**Verify installation**:
+![Unity Package Manager with URDF Importer](./assets/screenshots/02-package-manager.png)
+
+Packages shown:
+- **ROS TCP Connector** (v0.7.0+)
+- **URDF Importer** (v0.5.2+)
+
+---
+
+## 2.3 Building Your First Scene
+
+Unity scenes consist of **GameObjects** (entities with Transform, Renderer, Collider components) arranged in a hierarchy.
+
+### Scene Structure
+
+1. **Main Camera**: Player viewpoint
+2. **Directional Light**: Sun/global illumination
+3. **Environment**: Ground, walls, obstacles
+4. **Robot**: Imported URDF model with physics
+
+### Create Ground Plane
+
+1. **GameObject → 3D Object → Plane**
+2. Rename to `Ground` (in **Hierarchy** panel)
+3. Set **Transform**:
+   - Position: `(0, 0, 0)`
+   - Scale: `(10, 1, 10)` — 100m × 100m ground
+
+### Add Physics Material
+
+Ground needs friction for robot traction:
+
+1. **Project** panel → Right-click → **Create → Physic Material**
+2. Name: `GroundMaterial`
+3. Set properties:
+   - **Dynamic Friction**: 0.6
+   - **Static Friction**: 0.6
+   - **Bounciness**: 0
+4. Drag `GroundMaterial` onto Ground's **Mesh Collider** component (in **Inspector**)
+
+### Add Walls and Obstacles
+
+Create an enclosed room:
+
+```csharp
+// Create walls manually or use ProBuilder (Window → Package Manager → ProBuilder)
+```
+
+1. **GameObject → 3D Object → Cube**
+2. Create 4 walls:
+   - **North Wall**: Position `(0, 1.5, 5)`, Scale `(10, 3, 0.2)`
+   - **South Wall**: Position `(0, 1.5, -5)`, Scale `(10, 3, 0.2)`
+   - **East Wall**: Position `(5, 1.5, 0)`, Scale `(0.2, 3, 10)`
+   - **West Wall**: Position `(-5, 1.5, 0)`, Scale `(0.2, 3, 10)`
+
+**Before textures**:
+![Untextured room in Scene view](./assets/screenshots/02-scene-untextured.png)
+
+### Apply Materials and Lighting
+
+1. **Create Material**:
+   - **Project** → Right-click → **Create → Material**
+   - Name: `WallMaterial`
+   - Set **Albedo** (base color) to light gray
+   - Adjust **Metallic** (0) and **Smoothness** (0.3) for matte surface
+
+2. **Drag material onto walls** (in Scene view or Hierarchy)
+
+3. **Configure Directional Light**:
+   - Select **Directional Light** in Hierarchy
+   - Set **Transform Rotation**: `(50, -30, 0)` for realistic sun angle
+   - Set **Intensity**: 1.5
+   - Set **Color**: Slightly warm white (RGB: 255, 244, 230)
+
+**After textures and lighting**:
+![Textured room in Game view with lighting](./assets/screenshots/02-scene-textured.png)
+
+### Add Interactive Objects
+
+Place boxes that robots can push:
+
+1. **GameObject → 3D Object → Cube**
+2. Name: `PushableBox`
+3. Add **Rigidbody** component:
+   - Mass: 5 kg
+   - Drag: 0.5 (air resistance)
+   - Angular Drag: 0.5
+4. Position at `(2, 0.5, 0)` (above ground)
+
+Press **Play** (top center). Box should fall and land on ground.
+
+---
+
+## 2.4 Importing Humanoid Robots
+
+Unity's URDF Importer converts robot models to Unity's native ArticulationBody system.
+
+### URDF Import Process
+
+1. **Robotics → Import Robot from URDF**
+2. Browse to your URDF file (from Module 1): `humanoid_robot.urdf`
+3. Configure import settings:
+   - **Mesh Decomposer**: VHACD (for accurate collision)
+   - **Axis Type**: Y Axis (Unity's up-axis)
+   - **Orientation**: ROS (Z-forward)
+4. Click **Import**
+
+**Wait 1-3 minutes** for mesh processing.
+
+**Result**: Robot appears in Hierarchy with ArticulationBody components.
+
+![Humanoid robot with ArticulationBody Inspector](./assets/screenshots/02-robot-inspector.png)
+
+### ArticulationBody System
+
+Unity's ArticulationBody replaces legacy joints, providing:
+- **Stable multi-body dynamics**: Better than Rigidbody chains for robots
+- **PD controllers**: Position/velocity control built-in
+- **Reduced jitter**: More stable than ConfigurableJoint
+
+**Key components**:
+- **ArticulationBody**: Physics simulation for each link
+- **Drives**: PD controllers for joint position/velocity control
+- **Anchors**: Define joint attachment points
+
+### Configuring Joint Drives
+
+Joints need drive parameters to control position:
+
+1. Select robot joint (e.g., `hip_joint_left`) in Hierarchy
+2. Inspect **ArticulationBody** component:
+   - **X Drive** (for revolute joints):
+     - **Stiffness**: 10000 (N⋅m/rad) — how strongly joint resists deviation
+     - **Damping**: 1000 (N⋅m⋅s/rad) — velocity damping
+     - **Force Limit**: 500 (N⋅m) — maximum torque
+     - **Target**: 0 (degrees) — desired position
+
+**Stiffness/Damping trade-offs**:
+- **High stiffness**: Fast response, potential oscillation
+- **High damping**: Smooth motion, slower response
+- **Typical humanoid**: Stiffness 5000-20000, Damping 500-2000
+
+### Testing Robot Physics
+
+Attach the `SimpleJointController.cs` script (from code examples):
+
+1. Copy `SimpleJointController.cs` to `Assets/Scripts/`
+2. Select robot in Hierarchy
+3. **Inspector → Add Component → Simple Joint Controller**
+4. Assign joint references:
+   - Drag `left_hip_joint` → **Left Hip Joint** field
+   - Drag `right_hip_joint` → **Right Hip Joint** field
+   - Repeat for knee joints
+
+5. Press **Play**
+6. Controls:
+   - **Up/Down arrows**: Move hip joints
+   - **Left/Right arrows**: Move knee joints
+   - **R**: Reset to neutral position
+   - **Space**: Toggle control on/off
+
+**Testing interaction**:
+![Robot pushing box (contact interaction)](./assets/screenshots/02-robot-push.png)
+
+---
+
+## 2.5 Interactive Elements
+
+Making scenes interactive improves testing and debugging.
+
+### Camera Controller
+
+The `CameraController.cs` script enables free-flight navigation:
+
+<CodeBlock language="csharp" title="CameraController.cs (excerpt)" showLineNumbers>
+{`public class CameraController : MonoBehaviour
+{
+    public float moveSpeed = 5.0f;
+    public float lookSensitivity = 2.0f;
+
+    void Update()
+    {
+        // WASD movement
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
+        Vector3 move = transform.right * h + transform.forward * v;
+        transform.position += move * moveSpeed * Time.deltaTime;
+
+        // Mouse look
+        float mouseX = Input.GetAxis("Mouse X") * lookSensitivity;
+        float mouseY = Input.GetAxis("Mouse Y") * lookSensitivity;
+        transform.Rotate(-mouseY, mouseX, 0);
+    }
+}`}
+</CodeBlock>
+
+**Attach to Main Camera**:
+1. Select **Main Camera** in Hierarchy
+2. **Add Component → Camera Controller**
+3. Test in Play mode:
+   - **WASD**: Move camera
+   - **Mouse**: Look around
+   - **Q/E**: Up/down
+   - **Shift**: Sprint
+
+### Physics Debugging
+
+The `PushDetector.cs` script logs collision events:
+
+<CodeBlock language="csharp" title="PushDetector.cs (excerpt)" showLineNumbers>
+{`void OnCollisionEnter(Collision collision)
+{
+    float impulseMagnitude = collision.impulse.magnitude;
+
+    Debug.Log($"Collision with {collision.gameObject.name}");
+    Debug.Log($"  Impact force: {impulseMagnitude:F2} N⋅s");
+    Debug.Log($"  Contact points: {collision.contactCount}");
+}`}
+</CodeBlock>
+
+**Attach to robot or pushable objects**:
+1. Select object → **Add Component → Push Detector**
+2. Press **Play** and test collisions
+3. Open **Console** (`Window → General → Console`) to see logs
+
+---
+
+## 2.6 Troubleshooting & Optimization
+
+### Common Issues
+
+#### Issue 1: Robot Falls Through Ground
+
+**Symptom**: Robot spawns and immediately falls into void.
+
+**Causes**:
+- Missing colliders on ground or robot
+- Collision layers misconfigured
+
+**Fix**:
+1. Select **Ground** → Verify **Mesh Collider** component exists
+2. Select robot → Verify each link has **ArticulationBody** + colliders
+3. Check collision matrix: **Edit → Project Settings → Physics**
+   - Ensure robot layer collides with ground layer
+
+#### Issue 2: Poor Performance (< 60 FPS)
+
+**Symptom**: Game view stutters, low framerate in Stats panel.
+
+**Optimizations**:
+
+1. **Simplify colliders**:
+   - Replace mesh colliders with primitive shapes (box, sphere, capsule)
+   - Use **Mesh Collider → Convex** for complex shapes
+
+2. **Reduce mesh polycount**:
+   - Decimate meshes in Blender: Modifiers → Decimate → Ratio 0.5
+   - Use LOD (Level of Detail) groups for distant objects
+
+3. **Optimize lighting**:
+   - Use **Baked Lighting** for static objects:
+     - **Window → Rendering → Lighting** → Generate Lightmaps
+   - Reduce **Shadow Distance**: **Edit → Project Settings → Quality → Shadows**
+
+4. **Profile performance**:
+   - **Window → Analysis → Profiler**
+   - Identify bottlenecks (rendering, physics, scripts)
+
+#### Issue 3: Joints Behave Erratically
+
+**Symptom**: Joints oscillate, robot shakes, or explodes.
+
+**Causes**:
+- Stiffness too high
+- Solver iteration count too low
+- ArticulationBody mass ratios extreme (1:100+)
+
+**Fix**:
+1. Lower stiffness: 5000 → 1000 (test incrementally)
+2. Increase damping: 500 → 2000
+3. Increase **Solver Iterations**:
+   - **Edit → Project Settings → Physics → Solver Iteration Count**: 10 → 20
+4. Balance link masses (adjacent links within 10× mass ratio)
+
+### Performance Targets
+
+| Metric | Target | Acceptable | Poor |
+|--------|--------|-----------|------|
+| **FPS** | 60+ | 45-60 | < 45 |
+| **Physics timestep** | 0.02s (50 Hz) | 0.01s (100 Hz) | < 0.01s |
+| **Polycount** | < 100k tris/scene | 100-300k | > 500k |
+| **Draw calls** | < 500 | 500-1500 | > 2000 |
+
+**Check stats**: Enable **Game view → Stats** panel (top right).
+
+---
+
+## 2.7 Exercises
+
+### Exercise 1: Build a Test Environment
+
+**Objective**: Create a furnished apartment scene for navigation testing.
+
+**Requirements**:
+- **Room**: 10m × 10m with walls, floor, ceiling
+- **Furniture**: Table, chairs, couch (3D models from Unity Asset Store or ProBuilder)
+- **Lighting**: Mix of directional light + 2-3 point lights
+- **Performance**: 60+ FPS on recommended hardware
+
+**Deliverable**: Screenshot of scene from robot's perspective, FPS report.
+
+![Furnished apartment scene (Exercise 1 example)](./assets/screenshots/02-apartment-scene.png)
+
+### Exercise 2: Robot Manipulation Task
+
+**Objective**: Test robot's ability to interact with objects.
+
+**Tasks**:
+1. Import robot with arm and gripper (or use simplified 2-link arm)
+2. Place target object (cube or sphere) on table
+3. Script arm movement to reach object (use ArticulationBody drives)
+4. Detect grasp success (distance < threshold + contact forces)
+
+**Deliverable**: Video of robot reaching and grasping object, code for arm controller.
+
+### Exercise 3: Visual SLAM Dataset Generation
+
+**Objective**: Create synthetic dataset for visual SLAM testing.
+
+**Tasks**:
+1. Create indoor environment with distinct features (posters, furniture)
+2. Add virtual camera to robot (Unity **Camera** component)
+3. Script camera trajectory (move through environment, record poses)
+4. Export:
+   - RGB images: `Camera.Render()` → save PNG
+   - Depth images: Use depth camera shader
+   - Ground-truth poses: `Camera.transform.position/rotation`
+5. Format as TUM RGB-D dataset (compatible with ORB-SLAM3)
+
+**Deliverable**: Dataset folder with images + poses.txt, sample SLAM reconstruction.
+
+---
+
+## Summary
+
+In this chapter, you learned:
+
+- ✅ Installing Unity 2022.3 LTS with Unity Robotics Hub packages
+- ✅ Creating interactive 3D scenes with realistic materials and lighting
+- ✅ Importing URDF humanoid models using URDF Importer
+- ✅ Configuring ArticulationBody physics for robot joints
+- ✅ Implementing camera controls and physics interactions with C# scripts
+- ✅ Troubleshooting common Unity robotics issues
+- ✅ Optimizing scenes for real-time performance
+
+**Key Takeaways**:
+1. **Unity complements Gazebo**: Use Gazebo for physics dev, Unity for perception
+2. **ArticulationBody > Rigidbody**: More stable for multi-body robot systems
+3. **Performance matters**: Vision algorithms need 30+ FPS for real-time testing
+4. **Profiling is essential**: Use Unity Profiler to identify bottlenecks
+5. **Simplify collision geometry**: Visual meshes ≠ collision meshes
+
+**Workflow Integration**:
+- **Gazebo → Unity sync**: Use ROS TCP Connector to stream physics state from Gazebo to Unity (best of both worlds)
+- **Sensor simulation**: Unity's cameras + custom shaders can generate RGB-D datasets
+- **Hardware deployment**: Test vision pipelines in Unity before robot testing
+
+---
+
+## Additional Resources
+
+- [Unity Robotics Hub Documentation](https://github.com/Unity-Technologies/Unity-Robotics-Hub)
+- [URDF Importer Guide](https://github.com/Unity-Technologies/Unity-Robotics-Hub/blob/main/tutorials/urdf_importer/urdf_tutorial.md)
+- [ArticulationBody API Reference](https://docs.unity3d.com/2022.3/Documentation/ScriptReference/ArticulationBody.html)
+- [Unity Physics Best Practices](https://docs.unity3d.com/Manual/PhysicsOverview.html)
+- [ROS TCP Connector Setup](https://github.com/Unity-Technologies/ROS-TCP-Connector)
+- [Unity Profiler Guide](https://docs.unity3d.com/Manual/Profiler.html)
+
+**Estimated Time**: 4-6 hours to complete chapter and exercises

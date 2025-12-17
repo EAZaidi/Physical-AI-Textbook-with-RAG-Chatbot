@@ -1,0 +1,578 @@
+---
+slug: 02-isaac-ros-vslam
+---
+
+# Chapter 2: Isaac ROS — Accelerated VSLAM & Perception Pipelines
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+- Set up Isaac ROS Docker containers with GPU acceleration
+- Understand Visual SLAM (VSLAM) concepts and stereo camera geometry
+- Configure Isaac ROS Visual SLAM for real-time perception (>20 FPS)
+- Process recorded rosbags from Chapter 1 with GPU-accelerated VSLAM
+- Visualize 3D maps, pose trajectories, and tracking status in RViz2
+- Integrate live Isaac Sim data with Isaac ROS perception pipeline
+- Evaluate VSLAM performance (accuracy, loop closure, failure modes)
+
+## Introduction: What is VSLAM?
+
+**Visual Simultaneous Localization and Mapping (VSLAM)** is the foundation of autonomous robot navigation. It solves two problems simultaneously:
+
+1. **Localization**: Where is the robot? (6-DOF pose: x, y, z, roll, pitch, yaw)
+2. **Mapping**: What does the environment look like? (3D point cloud map)
+
+### Why GPU Acceleration Matters
+
+Traditional CPU-based VSLAM (ORB-SLAM, RTAB-Map) struggles with real-time performance:
+- **Feature extraction**: 10-30ms per frame on CPU
+- **Loop closure detection**: 50-100ms per closure candidate
+- **Map optimization**: Seconds for large maps (>10,000 keyframes)
+
+**Isaac ROS Visual SLAM** leverages NVIDIA GPU acceleration:
+- **cuVSLAM**: GPU-accelerated feature tracking (CUDA kernels)
+- **TensorRT**: Optimized neural network inference for loop closure
+- **Result**: >20 FPS on RTX 3060, >60 FPS on RTX 4090
+
+This enables real-time mapping for fast-moving humanoid robots without dropping frames.
+
+### Stereo vs Monocular VSLAM
+
+| Aspect | Monocular VSLAM | Stereo VSLAM |
+|--------|----------------|--------------|
+| **Scale** | Ambiguous (requires motion) | Known (from baseline) |
+| **Depth accuracy** | Poor at close range | Excellent (±2% at 2m) |
+| **Initialization** | Requires motion | Instant (first frame) |
+| **Robustness** | Sensitive to rotation-only motion | Handles all motions |
+| **Hardware cost** | 1 camera ($50-100) | 2 cameras ($100-200) |
+
+**We use stereo VSLAM** for humanoid robots because accurate depth is critical for obstacle avoidance and bipedal navigation.
+
+---
+
+## Section 1: Isaac ROS Docker Setup
+
+Isaac ROS requires specific CUDA, TensorRT, and ROS 2 versions. Docker ensures reproducibility.
+
+### Step 1: Install NVIDIA Container Toolkit
+
+```bash
+# Add NVIDIA Container Toolkit repository
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# Install toolkit
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+# Configure Docker runtime
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+### Step 2: Verify GPU Access in Docker
+
+```bash
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+```
+
+**Expected output**: GPU information (model, driver version, memory)
+
+### Step 3: Pull Isaac ROS Base Image
+
+```bash
+docker pull nvcr.io/nvidia/isaac-ros:humble-ros2_humble_20231122
+```
+
+**Size**: ~10GB (CUDA, TensorRT, ROS 2 Humble included)
+
+### Step 4: Build Custom Image (Optional)
+
+Use the Dockerfile from Phase 2:
+
+```bash
+cd /static/code-examples/module-3/docker
+docker build -t isaac_ros_module3:latest -f Dockerfile.isaac_ros .
+```
+
+Or use docker-compose:
+
+```bash
+docker-compose build
+docker-compose up -d
+docker exec -it isaac_ros_vslam bash
+```
+
+---
+
+## Section 2: Understanding Isaac ROS Visual SLAM
+
+### Input Topics (Stereo Configuration)
+
+Isaac ROS Visual SLAM expects these ROS 2 topics:
+
+| Topic | Message Type | Description |
+|-------|-------------|-------------|
+| `/camera/left/image_raw` | `sensor_msgs/Image` | Left camera RGB image |
+| `/camera/right/image_raw` | `sensor_msgs/Image` | Right camera RGB image |
+| `/camera/left/camera_info` | `sensor_msgs/CameraInfo` | Left camera intrinsics |
+| `/camera/right/camera_info` | `sensor_msgs/CameraInfo` | Right camera intrinsics |
+
+**Camera intrinsics** (from `CameraInfo`):
+- `K`: 3x3 intrinsic matrix (focal length, principal point)
+- `D`: Distortion coefficients (radial, tangential)
+- `baseline`: Distance between left/right cameras (for disparity → depth)
+
+### Output Topics
+
+| Topic | Message Type | Description |
+|-------|-------------|-------------|
+| `/visual_slam/tracking/odometry` | `nav_msgs/Odometry` | Robot pose + velocity |
+| `/visual_slam/tracking/vo_pose_covariance` | `geometry_msgs/PoseWithCovarianceStamped` | Pose + uncertainty |
+| `/visual_slam/vis/map_points` | `sensor_msgs/PointCloud2` | 3D map (sparse landmarks) |
+| `/visual_slam/vis/slam_odometry` | `nav_msgs/Odometry` | Optimized pose (post loop closure) |
+
+### VSLAM Pipeline Stages
+
+1. **Feature Extraction**: Detect keypoints in images (FAST, ORB, or learned features)
+2. **Feature Matching**: Find correspondences between left/right cameras (stereo matching)
+3. **Triangulation**: Compute 3D point positions from disparity
+4. **Pose Estimation**: Estimate camera motion using matched features (PnP solver)
+5. **Bundle Adjustment**: Optimize poses and landmarks jointly (minimize reprojection error)
+6. **Loop Closure**: Detect revisited locations, correct drift with pose graph optimization
+
+**GPU Acceleration**: Steps 1-4 run on GPU (CUDA), step 5-6 use TensorRT for fast optimization.
+
+---
+
+## Section 3: Configuring VSLAM Parameters
+
+The launch file from Phase 2 (`isaac_ros_vslam_launch.py`) configures all parameters. Let's understand the key settings:
+
+```python
+# Key parameters explained:
+parameters=[{
+    'num_cameras': 2,  # Stereo setup
+    'camera_optical_frames': ['camera_left_optical_frame', 'camera_right_optical_frame'],
+
+    # Frame IDs (must match your robot's TF tree)
+    'base_frame': 'base_link',  # Robot's base
+    'map_frame': 'map',          # Global map frame
+    'odom_frame': 'odom',        # Odometry frame
+
+    # SLAM modes
+    'enable_localization_n_mapping': True,  # SLAM mode (vs localization-only)
+    'enable_map_preservation': False,       # Start fresh each run (educational)
+
+    # Motion constraints
+    'enable_ground_constraint_in_odometry': False,  # No 2D constraint (humanoid can pitch/roll)
+    'enable_ground_constraint_in_slam': False,
+
+    # Performance tuning
+    'rectified_images': True,           # Assume images are rectified
+    'min_num_images': 2,                # Stereo pair required
+    'max_num_images': 2,                # Only 2 cameras
+    'verbosity': 3,                     # INFO level logging
+}]
+```
+
+**Critical settings for humanoids**:
+- `fix_base = False`: Floating base (no ground constraint)
+- `enable_ground_constraint = False`: Allow full 6-DOF motion (jumping, falling)
+- `enable_rectified_pose = True`: Smooth pose estimates (remove jitter)
+
+---
+
+## Section 4: Running VSLAM on Recorded Data
+
+Let's process the rosbag we recorded in Chapter 1 using offline VSLAM.
+
+### Step 1: Start Docker Container
+
+```bash
+cd /static/code-examples/module-3/docker
+docker-compose up -d
+docker exec -it isaac_ros_vslam bash
+```
+
+### Step 2: Launch Isaac ROS Visual SLAM
+
+Inside the container:
+
+```bash
+# Source ROS 2 environment
+source /opt/ros/humble/setup.bash
+
+# Launch VSLAM node
+ros2 launch /code-examples/isaac_ros_vslam_launch.py
+```
+
+### Step 3: Play Rosbag (In Another Terminal)
+
+```bash
+# On host machine (outside Docker)
+ros2 bag play isaac_sim_demo_20231208_143022
+```
+
+### Automated Script
+
+Use the provided script for convenience:
+
+```bash title="/static/code-examples/module-3/run_vslam_offline.sh"
+#!/bin/bash
+# Run Isaac ROS VSLAM on recorded rosbag
+
+set -e
+
+ROSBAG_DIR="${1:-isaac_sim_demo}"
+
+if [ ! -d "$ROSBAG_DIR" ]; then
+    echo "❌ Rosbag directory not found: $ROSBAG_DIR"
+    exit 1
+fi
+
+echo "🚀 Starting Isaac ROS VSLAM in Docker..."
+docker-compose -f /static/code-examples/module-3/docker/docker-compose.yml up -d
+
+echo "⏳ Waiting for container to be ready..."
+sleep 3
+
+echo "📡 Launching VSLAM node..."
+docker exec -d isaac_ros_vslam bash -c \
+  "source /opt/ros/humble/setup.bash && \
+   ros2 launch /code-examples/isaac_ros_vslam_launch.py"
+
+echo "⏳ Waiting for VSLAM node to initialize..."
+sleep 5
+
+echo "🎥 Playing rosbag: $ROSBAG_DIR"
+ros2 bag play "$ROSBAG_DIR" --rate 0.5  # Play at half speed for processing
+
+echo "✅ VSLAM processing complete!"
+echo "📊 To visualize: ros2 run rviz2 rviz2"
+```
+
+---
+
+## Section 5: Visualizing SLAM in RViz2
+
+### Step 1: Launch RViz2
+
+```bash
+ros2 run rviz2 rviz2
+```
+
+### Step 2: Configure Displays
+
+Add these visualizations:
+
+1. **Map Points (3D Point Cloud)**:
+   - Add → PointCloud2
+   - Topic: `/visual_slam/vis/map_points`
+   - Size: 0.02
+   - Color Transformer: Intensity
+
+2. **Odometry (Robot Trajectory)**:
+   - Add → Odometry
+   - Topic: `/visual_slam/tracking/odometry`
+   - Keep: 1000 (show trajectory history)
+   - Shaft Length: 0.3, Radius: 0.05
+
+3. **TF Frames (Coordinate Systems)**:
+   - Add → TF
+   - Show Names: ✅
+   - Marker Scale: 0.5
+
+4. **Camera Images (Optional)**:
+   - Add → Image
+   - Topic: `/camera/left/image_raw`
+
+5. **Set Fixed Frame**: `map`
+
+### Step 3: Save Configuration
+
+**File → Save Config As** → Save to:
+```
+/static/code-examples/module-3/vslam_visualization.rviz
+```
+
+**Load config later**:
+```bash
+ros2 run rviz2 rviz2 -d /static/code-examples/module-3/vslam_visualization.rviz
+```
+
+### Expected Visualization
+
+- **Point cloud**: Sparse 3D map (typically 1,000-10,000 points for a room)
+- **Trajectory**: Smooth path showing robot motion
+- **TF tree**: `map → odom → base_link → camera_left_optical_frame`
+
+:::tip Debugging VSLAM in RViz2
+- **No map points**: VSLAM not initialized (need more texture, or faster motion)
+- **Trajectory jumps**: Loop closure detected (good! Drift being corrected)
+- **TF errors**: Frame names mismatch between URDF and VSLAM config
+:::
+
+---
+
+## Section 6: Real-Time VSLAM with Isaac Sim
+
+Now let's run VSLAM live with Isaac Sim streaming data in real-time.
+
+### Integration Architecture
+
+```
+[Isaac Sim] --ROS2 Bridge--> [ROS 2 Topics] --> [Isaac ROS VSLAM] --> [Map + Odometry]
+```
+
+### Step 1: Create Integration Launch File
+
+```python title="/static/code-examples/module-3/isaac_sim_vslam_live.launch.py"
+#!/usr/bin/env python3
+"""
+Live integration: Isaac Sim → Isaac ROS VSLAM
+Module 3, Chapter 2
+"""
+
+from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    # Include Isaac ROS VSLAM launch
+    vslam_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            '/code-examples/isaac_ros_vslam_launch.py'
+        )
+    )
+
+    # Optional: Add RViz2 for visualization
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=['-d', '/code-examples/vslam_visualization.rviz']
+    )
+
+    return LaunchDescription([
+        vslam_launch,
+        rviz_node,
+    ])
+```
+
+### Step 2: Launch Sequence
+
+**Terminal 1 - Isaac Sim**:
+1. Open Isaac Sim
+2. Load humanoid robot with sensors (from Chapter 1)
+3. Enable ROS 2 Bridge extension
+4. Configure OmniGraph for sensor publishing
+5. Press **Play**
+
+**Terminal 2 - Isaac ROS VSLAM (Docker)**:
+```bash
+docker exec -it isaac_ros_vslam bash
+source /opt/ros/humble/setup.bash
+ros2 launch /code-examples/isaac_sim_vslam_live.launch.py
+```
+
+**Terminal 3 - Verify Topics**:
+```bash
+ros2 topic hz /visual_slam/tracking/odometry
+# Should show: ~30 Hz (matching camera rate)
+```
+
+### Step 3: Monitor Performance
+
+```bash
+# Check VSLAM status
+ros2 topic echo /visual_slam/status
+
+# Check GPU usage
+watch -n 1 nvidia-smi
+# GPU utilization should be 40-60% during VSLAM
+```
+
+---
+
+## Section 7: Evaluating VSLAM Performance
+
+### Metrics
+
+1. **Pose Accuracy**: Compare estimated pose to ground truth (from Isaac Sim)
+2. **Map Quality**: Count landmarks, check for duplicates
+3. **Frame Rate**: FPS for camera processing
+4. **Drift**: Cumulative position error over time
+5. **Loop Closure**: Successfully detected revisits
+
+### Performance Benchmarks (RTX 3060)
+
+| Metric | Target | Typical |
+|--------|--------|---------|
+| Frame Rate | &gt;20 FPS | 25-30 FPS |
+| Pose Error (1m travel) | &lt;5cm | 2-4cm |
+| Map Points | &gt;500 | 1000-5000 |
+| Tracking Success Rate | &gt;95% | 98% |
+| Loop Closure Detection | &lt;2s | 0.5-1s |
+
+### Analyzing VSLAM Output
+
+```bash
+# Pose covariance (uncertainty)
+ros2 topic echo /visual_slam/tracking/vo_pose_covariance --field pose.covariance
+
+# Good tracking: covariance < 0.01 in x, y, z
+# Lost tracking: covariance > 0.1 (reinitialize VSLAM)
+```
+
+---
+
+## Exercises
+
+### Exercise 1: Test Loop Closure
+
+**Task**: Walk the robot in a square loop and observe drift correction.
+
+**Steps**:
+1. Record a rosbag with robot moving in 5m × 5m square
+2. Run VSLAM offline
+3. In RViz2, watch trajectory when robot returns to start
+4. Observe: Trajectory should "snap" back (loop closure correction)
+
+**Validation**: Final pose error &lt;10cm after 20m travel.
+
+### Exercise 2: Compare Monocular vs Stereo
+
+**Task**: Disable right camera and test monocular VSLAM.
+
+**Steps**:
+1. Modify launch file: `num_cameras: 1`
+2. Comment out `/camera/right/*` topics
+3. Run VSLAM with single camera
+
+**Observation**:
+- Monocular requires motion to initialize (stereo is instant)
+- Scale drift (depth ambiguity) causes map to compress/expand
+
+### Exercise 3: Tune VSLAM Parameters
+
+**Task**: Adjust feature extraction settings for different environments.
+
+**Parameters to try**:
+```python
+# For low-texture environments (blank walls)
+'min_depth': 0.3,  # Meters (closer features)
+'max_depth': 10.0,  # Meters (farther features)
+
+# For fast motion (running robot)
+'max_slam_pose_ema_period': 1.5,  # Seconds (pose smoothing)
+```
+
+**Validation**: Compare tracking success rate in warehouse vs blank room.
+
+### Exercise 4: Evaluate Performance on GPU vs CPU
+
+**Task**: Measure VSLAM FPS with/without GPU.
+
+**Steps**:
+1. GPU mode (default): Run VSLAM in Docker
+2. CPU mode: `docker run --rm` (no `--gpus` flag)
+3. Compare FPS: `ros2 topic hz /visual_slam/tracking/odometry`
+
+**Expected**: GPU = 25-30 FPS, CPU = 5-10 FPS (5x speedup)
+
+---
+
+## Troubleshooting
+
+### Issue: VSLAM Fails to Initialize
+
+**Symptom**: No map points published, `/visual_slam/status` shows `INITIALIZING` forever.
+
+**Solutions**:
+1. **Add texture**: Low-texture scenes (blank walls) lack features
+   - Solution: Add textured objects (posters, furniture) in Isaac Sim
+2. **Increase motion**: Monocular VSLAM needs motion for scale
+   - Solution: Move robot faster (translation, not just rotation)
+3. **Check camera calibration**: Incorrect intrinsics prevent triangulation
+   - Solution: Verify `CameraInfo` K matrix matches camera specs
+
+### Issue: High Pose Drift (>10cm per meter)
+
+**Symptom**: Robot pose diverges from ground truth over time.
+
+**Solutions**:
+1. **Loop closure disabled**: Drift accumulates without correction
+   - Solution: Enable `enable_loop_closure: True` in config
+2. **Fast motion**: Camera motion blur reduces feature quality
+   - Solution: Reduce robot velocity or increase camera shutter speed
+3. **Rolling shutter**: Fast rotation causes distortion
+   - Solution: Use global shutter cameras or model rolling shutter
+
+### Issue: GPU Memory Exhausted
+
+**Symptom**: `CUDA out of memory` error, VSLAM crashes.
+
+**Solutions**:
+1. **Close Isaac Sim**: Frees 4-6GB VRAM
+2. **Reduce image resolution**: 640×480 instead of 1280×720
+3. **Limit map size**:
+   ```python
+   'max_landmarks_per_frame': 200,  # Default: 500
+   ```
+
+### Issue: TF Transform Errors
+
+**Symptom**: RViz2 shows "Frame [X] does not exist" warnings.
+
+**Solutions**:
+1. **Check frame names**: Must match URDF link names
+   ```bash
+   ros2 run tf2_ros tf2_echo map base_link
+   ```
+2. **Publish static transforms**: If missing TF publishers
+   ```bash
+   ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
+   ```
+
+---
+
+## Summary & Next Steps
+
+In this chapter, you learned to:
+
+✅ Set up Isaac ROS Docker with GPU acceleration and NVIDIA Container Toolkit
+✅ Understand VSLAM pipeline (feature extraction, matching, triangulation, optimization)
+✅ Configure Isaac ROS Visual SLAM for stereo cameras (6cm baseline)
+✅ Process recorded rosbags offline at >20 FPS on RTX 3060
+✅ Visualize 3D maps and pose trajectories in RViz2
+✅ Integrate live Isaac Sim data with real-time VSLAM
+✅ Evaluate performance (accuracy, drift, loop closure, FPS)
+
+**Key Takeaway**: GPU-accelerated VSLAM enables real-time 3D mapping for fast-moving humanoid robots, providing accurate localization (±2cm) even in complex environments.
+
+### What's Next?
+
+In **Chapter 3: Nav2 Path Planning**, we'll use the VSLAM maps generated here to:
+- Convert 3D point clouds to 2D occupancy grids
+- Configure Nav2 for bipedal robot footprint and motion constraints
+- Plan collision-free paths using global and local planners
+- Send navigation goals and monitor execution in RViz2
+
+Continue to [Chapter 3 →](./03-nav2-planning)
+
+---
+
+## Additional Resources
+
+- **Isaac ROS Visual SLAM Docs**: [https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_visual_slam/](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_visual_slam/)
+- **cuVSLAM White Paper**: [https://developer.nvidia.com/blog/cuvslam/](https://developer.nvidia.com/blog/cuvslam/)
+- **NVIDIA Container Toolkit**: [https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/)
+- **ROS 2 TF Debugging**: [https://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Debugging-Tf2-Problems.html](https://docs.ros.org/en/humble/Tutorials/Intermediate/Tf2/Debugging-Tf2-Problems.html)

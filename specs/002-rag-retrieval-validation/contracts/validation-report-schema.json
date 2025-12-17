@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RAG Pipeline Validation Report",
+  "description": "Schema for RAG retrieval validation results",
+  "type": "object",
+  "required": ["timestamp", "total_queries", "metrics", "test_cases", "summary"],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when validation was run"
+    },
+    "total_queries": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of queries tested"
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["avg_precision_at_5", "mrr", "avg_latency_ms", "p95_latency_ms", "p99_latency_ms", "metadata_completeness_rate", "hash_validation_pass_rate"],
+      "properties": {
+        "avg_precision_at_5": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Average precision@5 across all queries"
+        },
+        "mrr": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Mean Reciprocal Rank across all queries"
+        },
+        "avg_latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average end-to-end query latency in milliseconds"
+        },
+        "p95_latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "95th percentile latency in milliseconds"
+        },
+        "p99_latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "99th percentile latency in milliseconds"
+        },
+        "metadata_completeness_rate": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Percentage of results with all 6 metadata fields non-null"
+        },
+        "hash_validation_pass_rate": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Percentage of results where recomputed hash matches stored hash"
+        }
+      }
+    },
+    "test_cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/TestCase"
+      },
+      "description": "List of all test cases executed"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Human-readable pass/fail summary"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of identified problems or warnings"
+    }
+  },
+  "definitions": {
+    "TestCase": {
+      "type": "object",
+      "required": ["query", "actual_results", "relevance_labels", "precision_at_k"],
+      "properties": {
+        "query": {
+          "$ref": "#/definitions/Query"
+        },
+        "expected_criteria": {
+          "type": "object",
+          "description": "Expected outcome criteria (e.g., min_score, expected_topic)"
+        },
+        "actual_results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SearchResult"
+          },
+          "description": "Retrieved results from Qdrant"
+        },
+        "relevance_labels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2,
+            "description": "0=Not Relevant, 1=Relevant, 2=Highly Relevant"
+          },
+          "description": "Manual relevance judgments for each result"
+        },
+        "precision_at_k": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Computed precision@K for this query"
+        },
+        "rank_of_best": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "1-indexed position of best result, or null if no relevant results"
+        }
+      }
+    },
+    "Query": {
+      "type": "object",
+      "required": ["text", "top_k", "query_type"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Natural language query text"
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 5,
+          "description": "Number of results to retrieve"
+        },
+        "query_type": {
+          "type": "string",
+          "enum": ["specific", "broad", "paraphrase", "edge"],
+          "description": "Type of query for categorization"
+        }
+      }
+    },
+    "SearchResult": {
+      "type": "object",
+      "required": ["similarity_score", "content", "url", "title", "chunk_index", "timestamp", "content_hash"],
+      "properties": {
+        "similarity_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Cosine similarity score"
+        },
+        "content": {
+          "type": "string",
+          "description": "Chunk text content"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Source page URL"
+        },
+        "title": {
+          "type": "string",
+          "description": "Source page title"
+        },
+        "chunk_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Position of chunk within source page (0-indexed)"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when chunk was ingested"
+        },
+        "content_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA256 hex hash of content"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+#usda 1.0
+(
+    doc = "Isaac Sim Scene: Corridor Navigation - Module 3"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+# Placeholder USD file for corridor navigation scene
+# Create in Isaac Sim: narrow corridor (1.2m wide), 20m long
+# Add humanoid robot, test narrow passage navigation

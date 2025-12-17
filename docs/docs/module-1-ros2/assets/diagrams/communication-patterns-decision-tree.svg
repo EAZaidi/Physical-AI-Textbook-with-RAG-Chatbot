@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Communication Patterns Decision Tree -->
+<!-- TODO: Edit this SVG to create a decision flowchart -->
+<!-- CONTENT TO SHOW:
+     - Start: "What type of communication?"
+     - Decision: "Continuous data?" → Yes: Topic
+     - Decision: "One-time request?" → Yes: Service
+     - Decision: "Long task with feedback?" → Yes: Action
+     - Include examples for each path
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="600" viewBox="0 0 700 600">
+  <text x="350" y="30" text-anchor="middle" font-size="20" font-weight="bold">ROS 2 Communication Patterns Decision Tree</text>
+
+  <!-- Start -->
+  <ellipse cx="350" cy="100" rx="120" ry="40" fill="#ffffcc" stroke="#cccc00" stroke-width="2"/>
+  <text x="350" y="105" text-anchor="middle" font-size="14">What type of communication?</text>
+
+  <!-- TODO: Add decision diamonds and outcome boxes -->
+  <!-- Decision 1: Continuous data? -->
+  <!-- Decision 2: One-time request? -->
+  <!-- Decision 3: Long-running task? -->
+  <!-- Outcomes: Topic, Service, Action -->
+
+  <text x="350" y="570" text-anchor="middle" font-size="12" fill="#666">
+    Edit to add complete decision tree with examples (e.g., "Stream camera images → Topic")
+  </text>
+</svg>

@@ -1,0 +1,315 @@
+---
+id: 04-urdf-basics
+title: "Chapter 4: URDF Basics for Humanoid Robots"
+description: "Understanding and creating robot models with URDF"
+module: "module-1-ros2"
+chapter: "04"
+section: "urdf-basics"
+keywords: ["URDF", "robot modeling", "links", "joints", "kinematic tree", "RViz2", "humanoid", "sensors"]
+sidebar_position: 5
+---
+
+# Chapter 4: URDF Basics for Humanoid Robots
+
+## Learning Objectives
+
+By the end of this chapter, you will be able to:
+
+1. Understand URDF structure (links, joints, kinematic tree)
+2. Read and interpret URDF files for humanoid robots
+3. Modify URDF files (add links, adjust joint limits)
+4. Visualize URDF models in RViz2
+5. Add sensors (cameras, LiDAR) to robot models
+
+**Estimated Time**: ~2 hours
+
+---
+
+## 1. Introduction to URDF
+
+### What is URDF?
+
+**URDF** = Unified Robot Description Format
+
+- XML-based format for describing robot structure
+- Defines kinematic tree (links + joints)
+- Used for simulation, visualization, planning
+
+**Why URDF Matters**:
+- Required for Gazebo/Unity/Isaac Sim simulation
+- Enables motion planning and control
+- Foundation for Module 7 (Humanoid Capstone Project)
+
+### URDF vs SDF
+
+| Format | Purpose | Complexity |
+|--------|---------|------------|
+| URDF | Single robot description | Simple, ROS-focused |
+| SDF | Multi-robot scenes + environments | More complex, Gazebo-focused |
+
+**For Module 1**: We focus on URDF basics for single humanoid robot
+
+**Further Reading**:
+- [URDF Tutorials](https://docs.ros.org/en/humble/Tutorials/Intermediate/URDF/URDF-Main.html)
+
+---
+
+## 2. URDF Structure Overview
+
+### Core Components
+
+```xml
+<robot name="my_robot">
+  <!-- Links: Rigid bodies -->
+  <link name="base_link">...</link>
+
+  <!-- Joints: Connections between links -->
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link1"/>
+  </joint>
+</robot>
+```
+
+### Kinematic Tree
+
+**Rule**: One root link, no cycles
+
+```
+         torso (root)
+           |
+    -------+-------
+    |             |
+  neck          hips
+    |             |
+  head        legs...
+```
+
+---
+
+## 3. Defining Links
+
+### Link Anatomy
+
+```xml
+<link name="torso">
+  <!-- Visual: What you see -->
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <box size="0.3 0.2 0.5"/>
+    </geometry>
+    <material name="blue">
+      <color rgba="0 0 1 1"/>
+    </material>
+  </visual>
+
+  <!-- Collision: For physics -->
+  <collision>
+    <geometry>
+      <box size="0.3 0.2 0.5"/>
+    </geometry>
+  </collision>
+
+  <!-- Inertial: For dynamics (optional) -->
+  <inertial>
+    <mass value="10.0"/>
+    <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0"/>
+  </inertial>
+</link>
+```
+
+### Geometry Types
+
+- `<box size="x y z"/>` - Rectangular box
+- `<cylinder radius="r" length="l"/>` - Cylinder
+- `<sphere radius="r"/>` - Sphere
+- `<mesh filename="model.dae"/>` - Complex mesh
+
+**For Module 1**: Use simple boxes/cylinders
+
+---
+
+## 4. Defining Joints
+
+### Joint Types
+
+| Type | Motion | Use Case |
+|------|--------|----------|
+| `revolute` | Rotation (limited) | Elbow, knee, shoulder |
+| `continuous` | Rotation (unlimited) | Wheels |
+| `prismatic` | Linear | Telescoping arm |
+| `fixed` | None | Sensors, static connections |
+
+### Joint Definition
+
+```xml
+<joint name="left_shoulder" type="revolute">
+  <parent link="torso"/>
+  <child link="left_upper_arm"/>
+
+  <!-- Position relative to parent -->
+  <origin xyz="0 0.15 0.4" rpy="0 0 0"/>
+
+  <!-- Axis of rotation -->
+  <axis xyz="0 1 0"/>
+
+  <!-- Joint limits -->
+  <limit lower="-1.57" upper="1.57" effort="100" velocity="1.0"/>
+</joint>
+```
+
+---
+
+## 5. Simplified Humanoid URDF
+
+### Structure (13 Links, 12 Joints)
+
+See: [`assets/code-examples/simple_humanoid.urdf`](./assets/code-examples/simple_humanoid.urdf)
+
+**Diagram**: [See `assets/diagrams/humanoid-skeleton-labeled.svg`]
+
+**Links**:
+- torso (root)
+- head
+- left/right_upper_arm, left/right_lower_arm, left/right_hand
+- left/right_upper_leg, left/right_lower_leg, left/right_foot
+
+**Joints**:
+- neck, left/right_shoulder, left/right_elbow, left/right_wrist
+- left/right_hip, left/right_knee, left/right_ankle
+
+---
+
+## 6. Visualizing URDF in RViz2
+
+### Step 1: Launch RViz2
+
+```bash
+rviz2
+```
+
+### Step 2: Publish Robot State
+
+```bash
+# In another terminal
+ros2 run robot_state_publisher robot_state_publisher \
+  --ros-args -p robot_description:="$(cat simple_humanoid.urdf)"
+```
+
+### Step 3: Configure RViz2
+
+1. Set **Fixed Frame** to `base_link` or `torso`
+2. Add **RobotModel** display
+3. Adjust view to see full robot
+
+**Expected**: 3D humanoid model with all links visible
+
+### Step 4: Manipulate Joints (Optional)
+
+```bash
+# Install joint state publisher GUI
+sudo apt install ros-humble-joint-state-publisher-gui
+
+# Run it
+ros2 run joint_state_publisher_gui joint_state_publisher_gui
+```
+
+**Result**: Sliders to move robot joints in real-time
+
+---
+
+## 7. Exercise: Adding a Camera Sensor
+
+### Task
+
+Add a camera link to the head of the humanoid robot.
+
+**Solution**: See [`assets/code-examples/humanoid_with_camera.urdf`](./assets/code-examples/humanoid_with_camera.urdf)
+
+### Steps
+
+1. **Create camera link**:
+```xml
+<link name="camera">
+  <visual>
+    <geometry>
+      <box size="0.05 0.1 0.05"/>
+    </geometry>
+    <material name="black">
+      <color rgba="0 0 0 1"/>
+    </material>
+  </visual>
+</link>
+```
+
+2. **Create joint** (fixed to head):
+```xml
+<joint name="camera_joint" type="fixed">
+  <parent link="head"/>
+  <child link="camera"/>
+  <origin xyz="0.1 0 0" rpy="0 0 0"/>
+</joint>
+```
+
+3. **Validate**:
+```bash
+check_urdf humanoid_with_camera.urdf
+```
+
+4. **Visualize in RViz2** - camera should appear on head
+
+---
+
+## 8. Troubleshooting URDF Errors
+
+### Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `parent link 'X' not found` | Typo or link not defined | Check link names match exactly |
+| `joint creates loop` | Kinematic cycle detected | Ensure tree structure (no cycles) |
+| `invalid joint type` | Typo in joint type | Use: revolute, continuous, prismatic, fixed |
+| `URDF parse error` | XML syntax error | Check closing tags, quotes |
+
+### Validation Tools
+
+```bash
+# Check URDF syntax
+check_urdf my_robot.urdf
+
+# Convert to graph (view tree structure)
+urdf_to_graphiz my_robot.urdf
+dot -Tpdf robot.gv -o robot.pdf
+```
+
+---
+
+## 9. Summary
+
+### Key Takeaways
+
+- **URDF** defines robot structure (links + joints)
+- **Links** = rigid bodies (visual + collision + inertial)
+- **Joints** = connections (revolute, prismatic, fixed, continuous)
+- **Kinematic tree** = one root, no cycles
+- **RViz2** visualizes URDF models
+- **Simple geometries** (boxes, cylinders) sufficient for learning
+
+### Self-Check Questions
+
+1. What is the difference between a link and a joint?
+2. What are the four main joint types?
+3. Why can't URDF have kinematic cycles?
+4. How do you visualize a URDF file?
+
+---
+
+## 10. Further Reading
+
+- [URDF Tutorials](https://docs.ros.org/en/humble/Tutorials/Intermediate/URDF/URDF-Main.html)
+- [URDF XML Specification](http://wiki.ros.org/urdf/XML)
+- [robot_state_publisher](https://docs.ros.org/en/humble/p/robot_state_publisher/)
+- [RViz2 User Guide](https://docs.ros.org/en/humble/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html)
+
+**Module Complete!** Next: Module 2 - Simulation Environments

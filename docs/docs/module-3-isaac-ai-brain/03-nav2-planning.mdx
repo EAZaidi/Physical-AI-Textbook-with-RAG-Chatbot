@@ -1,0 +1,440 @@
+---
+slug: 03-nav2-planning
+---
+
+# Chapter 3: Nav2 — Path Planning for Bipedal Humanoid Movement
+
+## Learning Objectives
+
+- Understand Nav2 architecture (global planner, local planner, costmaps, behavior trees)
+- Configure Nav2 for bipedal robots (footprint, velocity limits, inflation radius)
+- Convert VSLAM point clouds to 2D occupancy grids for planning
+- Launch Nav2 stack with custom parameters for humanoid motion
+- Send navigation goals via RViz2 and programmatic APIs
+- Tune planner parameters for different scenarios (narrow passages, dynamic obstacles)
+- Understand DWB controller and trajectory scoring for bipedal locomotion
+
+## Introduction: Why Nav2?
+
+**Nav2 (Navigation2)** is ROS 2's navigation framework for autonomous mobile robots. While originally designed for wheeled robots, it's highly adaptable for bipedal humanoids with proper tuning.
+
+### Key Differences: Wheeled vs Bipedal Navigation
+
+| Aspect | Wheeled Robot | Bipedal Humanoid |
+|--------|--------------|------------------|
+| **Footprint** | Circular/rectangular (fixed) | Circular approximation (stance phase) |
+| **Max velocity** | 1-2 m/s (fast) | 0.3-0.5 m/s (slower, stable walking) |
+| **Acceleration** | 1-2 m/s² (quick) | 0.5 m/s² (gradual, balance constraint) |
+| **Rotation** | In-place rotation (0.5-1 rad/s) | Limited rotation (0.3 rad/s, balance) |
+| **Height clearance** | 0.3m (flat ground) | 1.5m (head clearance) |
+
+**Our tuning strategy**: Conservative velocities, larger safety margins, smoother trajectories.
+
+---
+
+## Section 1: Nav2 Architecture Overview
+
+Nav2 consists of 6 main servers:
+
+### 1. **Map Server**
+- Loads static occupancy grids (from saved SLAM maps)
+- Publishes `/map` topic (nav_msgs/OccupancyGrid)
+
+### 2. **Planner Server**
+- **Global Planner**: Computes high-level path from start to goal
+- Algorithms: NavFn (Dijkstra), Smac Planner (A*, hybrid A*)
+- Output: nav_msgs/Path (sequence of waypoints)
+
+### 3. **Controller Server**
+- **Local Planner**: Generates velocity commands to follow global path
+- Algorithms: DWB (Dynamic Window Approach), TEB (Timed Elastic Band)
+- Avoids local obstacles, respects velocity limits
+- Output: geometry_msgs/Twist (linear + angular velocity)
+
+### 4. **Behavior Tree Navigator (BT Navigator)**
+- Coordinates all servers using behavior trees
+- Handles failures: stuck → recovery behaviors (spin, backup, wait)
+- State machine: Idle → Planning → Following → Succeeded/Aborted
+
+### 5. **Recoveries Server**
+- Executes recovery behaviors when navigation fails
+- Actions: Spin (rotate 360°), BackUp (reverse 0.5m), Wait (pause 5s)
+
+### 6. **Waypoint Follower**
+- Follows sequence of waypoints (multi-goal navigation)
+- Useful for patrol routes, exploration
+
+### Costmap Architecture
+
+Nav2 uses **two costmaps**:
+
+**Global Costmap**:
+- Full map extent (e.g., 50m × 50m)
+- Static obstacles (walls, furniture)
+- Used by global planner for long-range planning
+
+**Local Costmap**:
+- Rolling window (e.g., 3m × 3m around robot)
+- Dynamic obstacles (people, moving objects)
+- Used by local planner for reactive navigation
+
+**Costmap layers**:
+1. **Static Layer**: Fixed obstacles from SLAM map
+2. **Inflation Layer**: Adds safety buffer around obstacles
+3. **Obstacle Layer**: Dynamic obstacles from sensors (LiDAR, cameras)
+
+---
+
+## Section 2: Configuring Nav2 for Bipedal Robots
+
+The key tuning file is `nav2_params_bipedal.yaml` (created in Phase 2). Let's break down critical settings:
+
+### Robot Footprint
+
+```yaml
+robot_radius: 0.4  # meters (circular approximation)
+# Or use polygon:
+footprint: [[0.3, 0.3], [0.3, -0.3], [-0.3, -0.3], [-0.3, 0.3]]
+```
+
+**Why circular**: Simplifies collision checking. Bipedal stance is approximately circular when viewed from above.
+
+### Velocity Limits (DWB Controller)
+
+```yaml
+max_vel_x: 0.5      # m/s (forward walking speed)
+min_vel_x: -0.3     # m/s (slow backward walking)
+max_vel_theta: 0.5  # rad/s (turning speed)
+acc_lim_x: 0.5      # m/s² (smooth acceleration)
+acc_lim_theta: 0.8  # rad/s² (smooth rotation)
+```
+
+**Rationale**: Slower than wheeled robots to maintain balance. Gradual acceleration prevents tipping.
+
+### Inflation Parameters
+
+```yaml
+inflation_radius: 0.55  # meters (buffer around obstacles)
+cost_scaling_factor: 3.0  # How fast cost increases near obstacles
+```
+
+**Effect**: Robot maintains 15cm clearance from walls (inflation_radius - robot_radius = 0.55 - 0.4 = 0.15m).
+
+---
+
+## Section 3: Loading Maps from VSLAM
+
+VSLAM outputs 3D point clouds, but Nav2 needs 2D occupancy grids. We'll convert them.
+
+### Method 1: Using Nav2 Map Server (Manual)
+
+1. Save SLAM map from Chapter 2:
+```bash
+ros2 run nav2_map_server map_saver_cli -f my_map
+# Creates: my_map.yaml, my_map.pgm
+```
+
+2. Load map with Nav2:
+```bash
+ros2 run nav2_map_server map_server --ros-args -p yaml_filename:=my_map.yaml
+```
+
+### Method 2: Programmatic Conversion
+
+```python title="/static/code-examples/module-3/vslam_to_occupancy.py"
+#!/usr/bin/env python3
+"""Convert VSLAM point cloud to 2D occupancy grid"""
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import PointCloud2
+from nav_msgs.msg import OccupancyGrid
+import sensor_msgs_py.point_cloud2 as pc2
+import numpy as np
+
+class VslamToOccupancy(Node):
+    def __init__(self):
+        super().__init__('vslam_to_occupancy')
+        self.subscription = self.create_subscription(
+            PointCloud2, '/visual_slam/vis/map_points',
+            self.pointcloud_callback, 10)
+        self.publisher = self.create_publisher(OccupancyGrid, '/map', 10)
+
+    def pointcloud_callback(self, msg):
+        # Extract XYZ points
+        points = np.array([[p[0], p[1], p[2]] for p in
+                          pc2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)])
+
+        # Project to 2D (discard Z)
+        points_2d = points[:, :2]
+
+        # Create occupancy grid
+        resolution = 0.05  # 5cm cells
+        origin_x, origin_y = points_2d.min(axis=0) - 1.0
+        width = int((points_2d[:, 0].max() - origin_x) / resolution)
+        height = int((points_2d[:, 1].max() - origin_y) / resolution)
+
+        grid = np.full((height, width), -1, dtype=np.int8)  # -1 = unknown
+
+        for p in points_2d:
+            x_idx = int((p[0] - origin_x) / resolution)
+            y_idx = int((p[1] - origin_y) / resolution)
+            if 0 <= x_idx < width and 0 <= y_idx < height:
+                grid[y_idx, x_idx] = 100  # 100 = occupied
+
+        # Publish OccupancyGrid
+        occupancy_msg = OccupancyGrid()
+        occupancy_msg.header = msg.header
+        occupancy_msg.info.resolution = resolution
+        occupancy_msg.info.width = width
+        occupancy_msg.info.height = height
+        occupancy_msg.info.origin.position.x = origin_x
+        occupancy_msg.info.origin.position.y = origin_y
+        occupancy_msg.data = grid.flatten().tolist()
+        self.publisher.publish(occupancy_msg)
+
+def main():
+    rclpy.init()
+    node = VslamToOccupancy()
+    rclpy.spin(node)
+```
+
+---
+
+## Section 4: Launching Nav2 Stack
+
+### Unified Launch File
+
+```python title="/static/code-examples/module-3/nav2_bipedal_bringup.launch.py"
+#!/usr/bin/env python3
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from ament_index_python.packages import get_package_share_directory
+import os
+
+def generate_launch_description():
+    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
+    params_file = '/code-examples/nav2_params_bipedal.yaml'
+
+    return LaunchDescription([
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(nav2_bringup_dir, 'launch', 'bringup_launch.py')),
+            launch_arguments={
+                'params_file': params_file,
+                'use_sim_time': 'True',  # Important for rosbag playback
+            }.items()
+        )
+    ])
+```
+
+### Launch Sequence
+
+**Terminal 1 - VSLAM** (from Chapter 2):
+```bash
+docker exec -it isaac_ros_vslam bash
+ros2 launch /code-examples/isaac_ros_vslam_launch.py
+```
+
+**Terminal 2 - Nav2**:
+```bash
+ros2 launch /code-examples/nav2_bipedal_bringup.launch.py
+```
+
+**Terminal 3 - RViz2**:
+```bash
+ros2 run rviz2 rviz2
+# Add: Costmap (global), Costmap (local), Path, Robot Model
+```
+
+---
+
+## Section 5: Sending Navigation Goals
+
+### Method 1: RViz2 GUI (Interactive)
+
+1. In RViz2, click **"2D Goal Pose"** button (top toolbar)
+2. Click on map to set goal position
+3. Drag to set goal orientation
+4. Nav2 automatically plans and executes
+
+### Method 2: Programmatic (Python)
+
+```python title="/static/code-examples/module-3/send_nav_goal.py"
+#!/usr/bin/env python3
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+from nav2_msgs.action import NavigateToPose
+from geometry_msgs.msg import PoseStamped
+
+class NavGoalSender(Node):
+    def __init__(self):
+        super().__init__('nav_goal_sender')
+        self._action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+
+    def send_goal(self, x, y, yaw):
+        self._action_client.wait_for_server()
+
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose = PoseStamped()
+        goal_msg.pose.header.frame_id = 'map'
+        goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
+        goal_msg.pose.pose.position.x = x
+        goal_msg.pose.pose.position.y = y
+        goal_msg.pose.pose.orientation.z = yaw  # Simplified (use quaternion for full)
+
+        self._send_goal_future = self._action_client.send_goal_async(
+            goal_msg, feedback_callback=self.feedback_callback)
+        self._send_goal_future.add_done_callback(self.goal_response_callback)
+
+    def feedback_callback(self, feedback_msg):
+        feedback = feedback_msg.feedback
+        self.get_logger().info(f'Distance remaining: {feedback.distance_remaining:.2f}m')
+
+    def goal_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().info('Goal rejected')
+            return
+        self.get_logger().info('Goal accepted')
+
+def main():
+    rclpy.init()
+    node = NavGoalSender()
+    node.send_goal(x=5.0, y=2.0, yaw=0.0)  # Example goal
+    rclpy.spin(node)
+```
+
+---
+
+## Section 6: Understanding Path Planning
+
+### Global Planner: NavFn (Dijkstra's Algorithm)
+
+- Computes shortest path from start to goal
+- Uses occupancy grid costmap
+- Output: Sequence of waypoints (nav_msgs/Path)
+- **Pros**: Optimal path, always finds solution if exists
+- **Cons**: Doesn't consider robot kinematics (sharp turns)
+
+### Local Planner: DWB (Dynamic Window Approach)
+
+- Generates velocity trajectories within dynamic window
+- Scores trajectories based on:
+  - **Path alignment**: How well trajectory follows global path
+  - **Goal alignment**: Direct progress toward goal
+  - **Obstacle distance**: Clearance from obstacles
+  - **Speed**: Prefer faster forward motion
+- **Pros**: Reactive (avoids dynamic obstacles), smooth motion
+- **Cons**: Can get stuck in local minima
+
+### Trajectory Scoring Example
+
+```yaml
+# From nav2_params_bipedal.yaml
+PathAlign.scale: 32.0   # High weight (stick to global path)
+GoalAlign.scale: 24.0   # Medium weight (orient toward goal)
+PathDist.scale: 32.0    # High weight (progress along path)
+GoalDist.scale: 24.0    # Medium weight (distance to goal)
+ObstacleFootprint.scale: 0.02  # Low weight (already handled by inflation)
+```
+
+**Tuning tip**: Increase `PathAlign` if robot deviates from path. Increase `GoalAlign` if robot struggles to face goal.
+
+---
+
+## Section 7: Tuning Planner Parameters
+
+### Exercise: Narrow Doorway
+
+**Scenario**: 0.9m doorway, robot width 0.8m (tight clearance)
+
+**Adjust**:
+```yaml
+inflation_radius: 0.45  # Reduce from 0.55m (tighter tolerance)
+xy_goal_tolerance: 0.2  # Allow 20cm position error (avoid oscillation)
+```
+
+### Exercise: Dynamic Obstacles
+
+**Scenario**: Person walking across path
+
+**Adjust**:
+```yaml
+# Local costmap (obstacle layer)
+observation_sources: scan
+scan:
+  topic: /scan
+  clearing: True  # Clear obstacles when no longer detected
+  marking: True   # Add new obstacles
+```
+
+### Exercise: Fast vs Cautious Navigation
+
+**Fast** (open warehouse):
+```yaml
+max_vel_x: 0.7  # Increase speed
+inflation_radius: 0.5  # Reduce clearance
+```
+
+**Cautious** (cluttered lab):
+```yaml
+max_vel_x: 0.3  # Slower
+inflation_radius: 0.7  # Larger buffer
+```
+
+---
+
+## Exercises
+
+### Exercise 1: Test Narrow Passages
+Navigate through 0.9m doorway, tune `inflation_radius` until success rate >90%.
+
+### Exercise 2: Compare Planners
+Switch from NavFn to Smac Planner, compare path quality and planning time.
+
+### Exercise 3: Recovery Behaviors
+Block robot's path mid-navigation, observe recovery (spin, backup, replan).
+
+### Exercise 4: Multi-Waypoint Navigation
+Send 5 waypoints, ensure robot visits all in sequence.
+
+---
+
+## Troubleshooting
+
+### Issue: Nav2 Cannot Find Path
+
+**Solution**: Check map has free space connecting start→goal. Reduce `inflation_radius`.
+
+### Issue: Robot Oscillates Near Goal
+
+**Solution**: Increase `xy_goal_tolerance` and `yaw_goal_tolerance`.
+
+### Issue: Planner Timeout
+
+**Solution**: Increase `planner_server.expected_planner_frequency` or simplify map.
+
+---
+
+## Summary & Next Steps
+
+✅ Configured Nav2 for bipedal humanoid (footprint, velocities, clearances)
+✅ Converted VSLAM maps to occupancy grids
+✅ Launched Nav2 stack with custom parameters
+✅ Sent navigation goals (RViz2 and Python API)
+✅ Tuned planners for different scenarios
+
+In **Chapter 4**, we integrate everything: Isaac Sim → Isaac ROS → Nav2 → Autonomous Navigation!
+
+Continue to [Chapter 4 →](./04-integration)
+
+---
+
+## Additional Resources
+
+- **Nav2 Docs**: [https://navigation.ros.org/](https://navigation.ros.org/)
+- **DWB Controller**: [https://navigation.ros.org/configuration/packages/configuring-dwb-controller.html](https://navigation.ros.org/configuration/packages/configuring-dwb-controller.html)
+- **Behavior Trees**: [https://navigation.ros.org/behavior_trees/index.html](https://navigation.ros.org/behavior_trees/index.html)

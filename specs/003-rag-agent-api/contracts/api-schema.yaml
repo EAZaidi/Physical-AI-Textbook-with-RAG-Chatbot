@@ -1,0 +1,790 @@
+openapi: 3.1.0
+info:
+  title: RAG Agent API
+  version: 1.0.0
+  description: |
+    Production-ready RAG agent for answering questions about the Physical AI & Humanoid Robotics textbook.
+
+    **Key Features**:
+    - Grounded responses using retrieved textbook content only
+    - Multi-turn conversation support with session management
+    - Confidence scoring and quality validation
+    - Streaming and synchronous response modes
+    - Hallucination prevention through 3-layer validation
+
+    **Base URL**: `http://localhost:8000` (development)
+
+  contact:
+    name: API Support
+    url: https://github.com/yourusername/physical-ai-humanoid-book
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server (configure after deployment)
+
+tags:
+  - name: chat
+    description: Chat endpoints for question answering
+  - name: sessions
+    description: Conversation session management
+  - name: health
+    description: Service health and monitoring
+
+paths:
+  /chat/run:
+    post:
+      summary: Send a question and receive a synchronous response
+      description: |
+        Submit a question about the textbook and receive a complete answer with sources.
+        This endpoint returns the full response once generation is complete (blocking).
+
+        **Use Cases**:
+        - Simple Q&A integrations
+        - Batch processing
+        - API testing
+
+        **Performance**: Typically responds in 1-3 seconds (p95 < 3s).
+      operationId: chatRun
+      tags:
+        - chat
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              basicQuestion:
+                summary: Basic question without session
+                value:
+                  message: "What is a ROS 2 node?"
+                  stream: false
+                  top_k: 5
+                  similarity_threshold: 0.7
+              followUpQuestion:
+                summary: Follow-up question with session context
+                value:
+                  message: "How do I create one?"
+                  session_id: "550e8400-e29b-41d4-a716-446655440000"
+                  stream: false
+                  top_k: 5
+      responses:
+        '200':
+          description: Successful response with answer and sources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+              examples:
+                highConfidence:
+                  summary: High confidence answer
+                  value:
+                    response: "A ROS 2 node is a process that performs computation in the ROS graph. Nodes communicate with each other through topics, services, and actions."
+                    confidence: 0.89
+                    sources:
+                      - chunk_text: "ROS 2 nodes are the fundamental building blocks..."
+                        similarity_score: 0.92
+                        chapter: "Chapter 3: Robot Operating System 2"
+                        section: "3.1 ROS 2 Architecture"
+                        url: "https://example.com/textbook/chapter3#section3-1"
+                        chunk_index: 12
+                    session_id: "550e8400-e29b-41d4-a716-446655440000"
+                    timestamp: "2025-12-17T14:23:45.123Z"
+                    confidence_level: "high"
+                    should_answer: true
+                insufficientContext:
+                  summary: Insufficient context (refusal)
+                  value:
+                    response: "I don't have sufficient information in the textbook to answer that question."
+                    confidence: 0.42
+                    sources: []
+                    session_id: "550e8400-e29b-41d4-a716-446655440001"
+                    timestamp: "2025-12-17T14:24:10.456Z"
+                    confidence_level: "insufficient"
+                    should_answer: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /chat/stream:
+    post:
+      summary: Send a question and receive a streaming response
+      description: |
+        Submit a question and receive the answer as Server-Sent Events (SSE).
+        This endpoint streams tokens as they're generated, enabling real-time UX.
+
+        **Use Cases**:
+        - Interactive chat interfaces
+        - Real-time user feedback
+        - Progressive response rendering
+
+        **Protocol**: Server-Sent Events (text/event-stream)
+
+        **Event Format**:
+        ```
+        data: {"type": "token", "content": "ROS"}
+
+        data: {"type": "token", "content": " 2"}
+
+        data: {"type": "done", "metadata": {"confidence": 0.89, "sources": [...]}}
+        ```
+      operationId: chatStream
+      tags:
+        - chat
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              streamingQuestion:
+                summary: Question with streaming enabled
+                value:
+                  message: "Explain URDF in simple terms"
+                  session_id: "550e8400-e29b-41d4-a716-446655440002"
+                  stream: true
+                  top_k: 5
+      responses:
+        '200':
+          description: Streaming response with Server-Sent Events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  Server-Sent Events stream. Each event is a JSON object with:
+                  - `type`: "token" (partial content) or "done" (completion)
+                  - `content`: Text token (for type="token")
+                  - `metadata`: Full ChatResponse metadata (for type="done")
+              examples:
+                streamingEvents:
+                  summary: Example SSE stream
+                  value: |
+                    data: {"type": "token", "content": "URDF"}
+
+                    data: {"type": "token", "content": " (Unified"}
+
+                    data: {"type": "token", "content": " Robot"}
+
+                    data: {"type": "done", "metadata": {"confidence": 0.91, "sources": [...]}}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /session/{session_id}/history:
+    get:
+      summary: Retrieve conversation history for a session
+      description: |
+        Get all messages in a conversation thread, including timestamps and confidence scores.
+
+        **Use Cases**:
+        - Display conversation history in UI
+        - Debugging and quality monitoring
+        - Session resumption after disconnection
+
+        **Retention**: Sessions are retained for 1 hour after last message.
+      operationId: getSessionHistory
+      tags:
+        - sessions
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: Unique session identifier (UUID v4)
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Conversation history retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationThread'
+              examples:
+                shortConversation:
+                  summary: Conversation with 3 exchanges
+                  value:
+                    thread_id: "550e8400-e29b-41d4-a716-446655440000"
+                    messages:
+                      - role: "user"
+                        content: "What is URDF?"
+                        timestamp: "2025-12-17T14:20:00.000Z"
+                      - role: "assistant"
+                        content: "URDF (Unified Robot Description Format) is an XML format..."
+                        timestamp: "2025-12-17T14:20:02.150Z"
+                        confidence: 0.91
+                      - role: "user"
+                        content: "Can you give an example?"
+                        timestamp: "2025-12-17T14:21:00.000Z"
+                    created_at: "2025-12-17T14:20:00.000Z"
+                    updated_at: "2025-12-17T14:21:00.000Z"
+                    topic_summary: "Discussion about URDF robot description format"
+                    metadata:
+                      user_id: "user123"
+                      tags: ["ros2", "urdf"]
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /session/{session_id}:
+    delete:
+      summary: Delete a conversation session
+      description: |
+        Permanently delete a conversation thread and all associated messages.
+
+        **Use Cases**:
+        - User-initiated conversation reset
+        - Privacy compliance (GDPR right to erasure)
+        - Testing and cleanup
+
+        **Warning**: This operation is irreversible.
+      operationId: deleteSession
+      tags:
+        - sessions
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: Unique session identifier (UUID v4)
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Session deleted successfully (no content)
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /health:
+    get:
+      summary: Service health check
+      description: |
+        Check the health status of the API and its dependencies.
+
+        **Dependencies Checked**:
+        - Qdrant vector database connectivity
+        - OpenAI API accessibility
+        - PostgreSQL database connection
+
+        **Use Cases**:
+        - Load balancer health checks
+        - Monitoring and alerting
+        - Deployment readiness verification
+      operationId: healthCheck
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded]
+                    description: Overall service status
+                  dependencies:
+                    type: object
+                    properties:
+                      qdrant:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [up, down]
+                          latency_ms:
+                            type: number
+                      openai:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [up, down]
+                          latency_ms:
+                            type: number
+                      postgresql:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [up, down]
+                          latency_ms:
+                            type: number
+                  timestamp:
+                    type: string
+                    format: date-time
+              examples:
+                healthy:
+                  summary: All services operational
+                  value:
+                    status: "healthy"
+                    dependencies:
+                      qdrant:
+                        status: "up"
+                        latency_ms: 12
+                      openai:
+                        status: "up"
+                        latency_ms: 156
+                      postgresql:
+                        status: "up"
+                        latency_ms: 8
+                    timestamp: "2025-12-17T14:30:00.000Z"
+                degraded:
+                  summary: Qdrant service down
+                  value:
+                    status: "degraded"
+                    dependencies:
+                      qdrant:
+                        status: "down"
+                        latency_ms: null
+                      openai:
+                        status: "up"
+                        latency_ms: 145
+                      postgresql:
+                        status: "up"
+                        latency_ms: 7
+                    timestamp: "2025-12-17T14:31:00.000Z"
+        '503':
+          description: Service is unhealthy (critical dependencies down)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    ChatRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: User's question about the textbook
+          example: "How do ROS 2 nodes communicate?"
+        session_id:
+          type: string
+          format: uuid
+          description: Session identifier for multi-turn conversations (auto-generated if not provided)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        stream:
+          type: boolean
+          default: false
+          description: Enable Server-Sent Events streaming response
+          example: false
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+          description: Number of chunks to retrieve from vector database
+          example: 5
+        similarity_threshold:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.7
+          description: Minimum cosine similarity for chunk inclusion
+          example: 0.7
+
+    ChatResponse:
+      type: object
+      required:
+        - response
+        - confidence
+        - sources
+        - session_id
+        - timestamp
+        - confidence_level
+        - should_answer
+      properties:
+        response:
+          type: string
+          description: Agent's generated answer text
+          example: "ROS 2 nodes communicate through a publish-subscribe mechanism using topics..."
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          description: Aggregate confidence score (average similarity)
+          example: 0.87
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/Source'
+          description: List of cited textbook chunks
+        session_id:
+          type: string
+          format: uuid
+          description: Session identifier for follow-up questions
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        timestamp:
+          type: string
+          format: date-time
+          description: Response generation timestamp (ISO 8601)
+          example: "2025-12-17T14:23:45.123Z"
+        confidence_level:
+          type: string
+          enum: [high, medium, low, insufficient]
+          description: Human-readable confidence category
+          example: "high"
+        should_answer:
+          type: boolean
+          description: Whether agent has sufficient context to answer
+          example: true
+
+    Source:
+      type: object
+      required:
+        - chunk_text
+        - similarity_score
+        - chapter
+        - section
+        - url
+        - chunk_index
+      properties:
+        chunk_text:
+          type: string
+          maxLength: 500
+          description: Retrieved text chunk (truncated for display)
+          example: "ROS 2 nodes use a distributed publish-subscribe architecture..."
+        similarity_score:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          description: Cosine similarity score
+          example: 0.92
+        chapter:
+          type: string
+          description: Chapter name from metadata
+          example: "Chapter 3: Robot Operating System 2"
+        section:
+          type: string
+          description: Section name from metadata
+          example: "3.2 ROS 2 Communication Patterns"
+        url:
+          type: string
+          format: uri
+          description: Textbook page URL
+          example: "https://example.com/textbook/chapter3#section3-2"
+        chunk_index:
+          type: integer
+          description: Position of chunk within source document
+          example: 15
+
+    ConversationThread:
+      type: object
+      required:
+        - thread_id
+        - messages
+        - created_at
+        - updated_at
+      properties:
+        thread_id:
+          type: string
+          format: uuid
+          description: Unique session identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        messages:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Message'
+          description: Ordered list of user/agent messages
+        created_at:
+          type: string
+          format: date-time
+          description: Session creation timestamp (UTC)
+          example: "2025-12-17T14:20:00.000Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last message timestamp (UTC)
+          example: "2025-12-17T14:23:00.000Z"
+        topic_summary:
+          type: string
+          maxLength: 200
+          description: AI-generated summary of conversation topics
+          example: "Discussion about ROS 2 node communication patterns"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional context (user_id, tags, etc.)
+          example:
+            user_id: "user123"
+            tags: ["ros2", "communication"]
+
+    Message:
+      type: object
+      required:
+        - role
+        - content
+        - timestamp
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+          description: Message sender role
+          example: "user"
+        content:
+          type: string
+          description: Message text
+          example: "What is a ROS 2 node?"
+        timestamp:
+          type: string
+          format: date-time
+          description: Message timestamp (UTC)
+          example: "2025-12-17T14:20:00.000Z"
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          description: Confidence score (assistant messages only)
+          example: 0.89
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: Error type identifier
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Message length must be between 1 and 1000 characters"
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+          example:
+            field: "message"
+            provided_length: 1200
+            max_length: 1000
+        timestamp:
+          type: string
+          format: date-time
+          description: Error occurrence timestamp
+          example: "2025-12-17T14:25:00.000Z"
+        request_id:
+          type: string
+          format: uuid
+          description: Unique request identifier for debugging
+          example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalidMessageLength:
+              summary: Message too long
+              value:
+                error: "VALIDATION_ERROR"
+                message: "Message length must be between 1 and 1000 characters"
+                details:
+                  field: "message"
+                  provided_length: 1200
+                  max_length: 1000
+                timestamp: "2025-12-17T14:25:00.000Z"
+                request_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+            invalidSessionId:
+              summary: Malformed session ID
+              value:
+                error: "VALIDATION_ERROR"
+                message: "session_id must be a valid UUID v4"
+                details:
+                  field: "session_id"
+                  provided_value: "invalid-uuid"
+                timestamp: "2025-12-17T14:26:00.000Z"
+                request_id: "a3c7f9e2-1234-5678-9abc-def012345678"
+
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingApiKey:
+              summary: No API key provided
+              value:
+                error: "AUTHENTICATION_ERROR"
+                message: "API key required. Include 'Authorization: Bearer YOUR_API_KEY' header."
+                timestamp: "2025-12-17T14:27:00.000Z"
+                request_id: "b4d8e3f1-2345-6789-abcd-ef0123456789"
+
+    PayloadTooLarge:
+      description: Request payload exceeds size limits
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            messageTooLong:
+              summary: Message exceeds 1000 characters
+              value:
+                error: "PAYLOAD_TOO_LARGE"
+                message: "Request payload exceeds maximum size (1000 characters)"
+                details:
+                  max_size: 1000
+                  provided_size: 1500
+                timestamp: "2025-12-17T14:28:00.000Z"
+                request_id: "c5e9f4g2-3456-789a-bcde-f01234567890"
+
+    RateLimitExceeded:
+      description: Too many requests (rate limit exceeded)
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per minute
+          example: 100
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+          example: 0
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Unix timestamp when limit resets
+          example: 1702825200
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rateLimitExceeded:
+              summary: API key rate limit exceeded
+              value:
+                error: "RATE_LIMIT_EXCEEDED"
+                message: "Rate limit exceeded. Maximum 100 requests per minute."
+                details:
+                  limit: 100
+                  reset_at: "2025-12-17T14:30:00.000Z"
+                timestamp: "2025-12-17T14:29:30.000Z"
+                request_id: "d6fag5h3-4567-89ab-cdef-012345678901"
+
+    ServiceUnavailable:
+      description: Service temporarily unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            qdrantDown:
+              summary: Vector database unavailable
+              value:
+                error: "SERVICE_UNAVAILABLE"
+                message: "Vector search service temporarily unavailable. Please retry in 30 seconds."
+                details:
+                  service: "qdrant"
+                  retry_after_seconds: 30
+                timestamp: "2025-12-17T14:30:00.000Z"
+                request_id: "e7gbh6i4-5678-9abc-def0-123456789012"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            sessionNotFound:
+              summary: Session does not exist
+              value:
+                error: "NOT_FOUND"
+                message: "Session not found. It may have expired (sessions are retained for 1 hour)."
+                details:
+                  session_id: "550e8400-e29b-41d4-a716-446655440000"
+                timestamp: "2025-12-17T14:31:00.000Z"
+                request_id: "f8hci7j5-6789-abcd-ef01-234567890123"
+
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unexpectedError:
+              summary: Internal processing error
+              value:
+                error: "INTERNAL_SERVER_ERROR"
+                message: "An unexpected error occurred. Our team has been notified."
+                timestamp: "2025-12-17T14:32:00.000Z"
+                request_id: "g9idj8k6-789a-bcde-f012-345678901234"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API_KEY
+      description: |
+        API key authentication using Bearer token scheme.
+
+        **Obtaining an API Key**:
+        Contact your administrator or register at the developer portal.
+
+        **Usage**:
+        Include the API key in the Authorization header:
+        ```
+        Authorization: Bearer YOUR_API_KEY
+        ```
+
+        **Rate Limits**:
+        - Default: 100 requests per minute per API key
+        - Contact support for higher limits
+
+security:
+  - ApiKeyAuth: []
