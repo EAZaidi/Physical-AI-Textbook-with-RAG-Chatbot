@@ -118,10 +118,10 @@ export interface BackendConfig {
  * Default backend configuration values
  */
 export const DEFAULT_BACKEND_CONFIG: BackendConfig = {
-  baseUrl: 'http://localhost:8000',
+  baseUrl: 'https://essaabbas-rag-chatbot.hf.space',
   timeoutMs: 30000,
   retryAttempts: 2,
-  streamingEnabled: false, // Temporarily disabled - will re-enable after frontend rebuild
+  streamingEnabled: false,
   headers: {
     'Content-Type': 'application/json',
   },
