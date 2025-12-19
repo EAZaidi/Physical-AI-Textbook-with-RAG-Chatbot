@@ -8,9 +8,9 @@
    ============================================================================ */
 
 :root {
-  /* Colors */
-  --chatbot-primary: #0066cc;
-  --chatbot-primary-hover: #0052a3;
+  /* Colors - Updated to match website green theme */
+  --chatbot-primary: #2e8555;
+  --chatbot-primary-hover: #277148;
   --chatbot-background: #ffffff;
   --chatbot-surface: #f5f5f5;
   --chatbot-border: #e0e0e0;
@@ -51,8 +51,8 @@
   --chatbot-border: #404040;
   --chatbot-text: #e0e0e0;
   --chatbot-text-secondary: #b0b0b0;
-  --chatbot-primary: #4d9aff;
-  --chatbot-primary-hover: #337acc;
+  --chatbot-primary: #25c2a0;
+  --chatbot-primary-hover: #21af90;
 }
 
 /* Reset box-sizing */
@@ -71,20 +71,18 @@
   position: fixed;
   bottom: 20px;
   right: 20px;
-  width: auto;
-  min-width: 60px;
-  height: 60px;
-  padding: 0 20px;
-  border-radius: 30px;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border-radius: 50%;
   background-color: var(--chatbot-primary);
   color: white;
   border: none;
   cursor: pointer;
-  box-shadow: var(--chatbot-shadow);
+  box-shadow: 0 4px 12px rgba(46, 133, 85, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   transition: var(--chatbot-transition);
   z-index: var(--chatbot-z-index);
   font-size: 16px;
@@ -540,21 +538,27 @@
 
 .messageContent {
   max-width: 80%;
-  padding: var(--chatbot-spacing-md);
-  border-radius: var(--chatbot-border-radius);
+  padding: 18px 24px;
   word-wrap: break-word;
+  position: relative;
+  /* Cloud-like rounded shape with organic curves */
+  border-radius: 30px 30px 30px 8px;
 }
 
 .messageUser .messageContent {
   background-color: var(--chatbot-primary);
   color: white;
-  border-bottom-right-radius: 4px;
+  /* User cloud: rounded on left, slight tail on bottom-right */
+  border-radius: 30px 30px 8px 30px;
+  box-shadow: 0 2px 8px rgba(46, 133, 85, 0.15);
 }
 
 .messageAssistant .messageContent {
   background-color: var(--chatbot-surface);
   color: var(--chatbot-text);
-  border-bottom-left-radius: 4px;
+  /* Assistant cloud: rounded on right, slight tail on bottom-left */
+  border-radius: 30px 30px 30px 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .messageText {

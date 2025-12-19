@@ -22,13 +22,17 @@ export interface SourceCitationProps {
 export function SourceCitation({ source, index }: SourceCitationProps): JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Format similarity score as percentage
-  const similarityPercent = Math.round(source.similarityScore * 100);
+  // Handle both camelCase and snake_case from backend
+  const similarityScore = (source.similarityScore ?? (source as any).similarity_score ?? 0);
 
-  // Truncate chunk text for preview
-  const previewText = source.chunkText.length > 150
-    ? `${source.chunkText.substring(0, 150)}...`
-    : source.chunkText;
+  // Format similarity score as percentage
+  const similarityPercent = Math.round(similarityScore * 100);
+
+  // Truncate chunk text for preview (handle undefined/null)
+  const chunkText = source.chunkText || (source as any).chunk_text || '';
+  const previewText = chunkText.length > 150
+    ? `${chunkText.substring(0, 150)}...`
+    : chunkText;
 
   return (
     <div className={styles.sourceCitation}>
@@ -43,7 +47,7 @@ export function SourceCitation({ source, index }: SourceCitationProps): JSX.Elem
             </>
           )}
         </div>
-        <span className={styles.sourceSimilarity} title={`Similarity score: ${source.similarityScore.toFixed(3)}`}>
+        <span className={styles.sourceSimilarity} title={`Similarity score: ${similarityScore.toFixed(3)}`}>
           {similarityPercent}%
         </span>
       </div>
@@ -56,7 +60,7 @@ export function SourceCitation({ source, index }: SourceCitationProps): JSX.Elem
         aria-label={isExpanded ? 'Collapse excerpt' : 'Expand excerpt'}
       >
         <span className={styles.sourcePreview}>
-          {isExpanded ? source.chunkText : previewText}
+          {isExpanded ? chunkText : previewText}
         </span>
         <svg
           width="16"

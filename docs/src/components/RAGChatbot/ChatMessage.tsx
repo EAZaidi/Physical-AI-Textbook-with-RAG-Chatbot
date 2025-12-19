@@ -82,10 +82,10 @@ export const ChatMessage = React.memo(function ChatMessage({ message }: ChatMess
       {/* Message Metadata (Assistant only) */}
       {!isUser && (
         <div className={styles.messageMetadata}>
-          {/* Confidence Badge */}
-          {message.confidenceLevel && (
+          {/* Confidence Badge - Hidden per user request */}
+          {/* {message.confidenceLevel && (
             <ConfidenceBadge level={message.confidenceLevel} />
-          )}
+          )} */}
 
           {/* Timestamp */}
           <span className={styles.messageTimestamp} title={new Date(message.timestamp).toLocaleString()}>
@@ -94,8 +94,8 @@ export const ChatMessage = React.memo(function ChatMessage({ message }: ChatMess
         </div>
       )}
 
-      {/* Sources (Assistant only) */}
-      {!isUser && message.sources && message.sources.length > 0 && (
+      {/* Sources (Assistant only) - Hidden per user request */}
+      {/* {!isUser && message.sources && message.sources.length > 0 && (
         <div className={styles.messageSources}>
           <h4 className={styles.sourcesTitle}>Sources</h4>
           <div className={styles.sourcesList}>
@@ -104,7 +104,7 @@ export const ChatMessage = React.memo(function ChatMessage({ message }: ChatMess
             ))}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Streaming Indicator */}
       {message.isStreaming && (

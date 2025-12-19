@@ -53,13 +53,13 @@ def create_rag_agent(session_id: str) -> Dict:
                 "type": "function",
                 "function": {
                     "name": "search_textbook",
-                    "description": "Search the Physical AI textbook for relevant information. MUST be called before answering any question.",
+                    "description": "Search the Physical AI & Humanoid Robotics textbook for technical information. Use this for questions about ROS 2, robotics, AI, sensors, control systems, or any technical concepts. Do NOT use for greetings or general conversation.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "The user's question to search for in the textbook"
+                                "description": "The user's technical question to search for in the textbook"
                             },
                             "top_k": {
                                 "type": "integer",
@@ -167,9 +167,9 @@ async def run_agent(agent_data: Dict, user_message: str, conversation_history: l
                 "usage": final_response.usage.model_dump() if final_response.usage else {}
             }
     
-    # No tool call (shouldn't happen with proper prompt, but handle it)
+    # No tool call (e.g., for greetings or general conversation)
     return {
-        "response": assistant_message.content or "I apologize, but I need to search the textbook first. Please try again.",
+        "response": assistant_message.content or "Hello! How can I help you today?",
         "tool_results": None,
         "usage": response.usage.model_dump() if response.usage else {}
     }
@@ -291,14 +291,33 @@ async def run_agent_stream(agent_data: Dict, user_message: str, conversation_his
                     }
                 }
         else:
-            # No tool call - shouldn't happen with proper prompt
-            yield {
-                "event": "error",
-                "data": {
-                    "error_code": "NO_TOOL_CALL",
-                    "message": "Agent did not call search_textbook. Please try again."
+            # No tool call (e.g., for greetings) - stream the direct response
+            if assistant_message.content:
+                # Stream the response character by character for consistency
+                for char in assistant_message.content:
+                    yield {
+                        "event": "content",
+                        "data": {
+                            "delta": char
+                        }
+                    }
+
+                # Yield completion event
+                yield {
+                    "event": "done",
+                    "data": {
+                        "tool_results": None,
+                        "usage": response.usage.model_dump() if response.usage else {}
+                    }
                 }
-            }
+            else:
+                yield {
+                    "event": "error",
+                    "data": {
+                        "error_code": "EMPTY_RESPONSE",
+                        "message": "No response generated. Please try again."
+                    }
+                }
 
     except Exception as e:
         # Yield error event

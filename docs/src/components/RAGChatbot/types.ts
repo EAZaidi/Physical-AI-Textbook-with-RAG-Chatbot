@@ -121,7 +121,7 @@ export const DEFAULT_BACKEND_CONFIG: BackendConfig = {
   baseUrl: 'http://localhost:8000',
   timeoutMs: 30000,
   retryAttempts: 2,
-  streamingEnabled: true,
+  streamingEnabled: false, // Temporarily disabled - will re-enable after frontend rebuild
   headers: {
     'Content-Type': 'application/json',
   },
@@ -146,6 +146,9 @@ export interface ChatRequest {
 
   /** Optional conversation history for multi-turn context */
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+
+  /** Enable streaming response (required for /chat/stream endpoint) */
+  stream?: boolean;
 }
 
 /**

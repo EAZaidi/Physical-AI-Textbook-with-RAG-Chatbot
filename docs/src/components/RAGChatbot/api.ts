@@ -111,7 +111,8 @@ export async function sendChatMessage(
       );
     }
 
-    return await response.json();
+    const data = await response.json();
+    return transformBackendResponse(data);
   } catch (error) {
     clearTimeout(timeoutId);
 
@@ -162,6 +163,32 @@ export async function sendChatMessageWithRetry(
 
     throw error;
   }
+}
+
+/**
+ * Transform backend response from snake_case to camelCase
+ * @param response - Backend response with snake_case fields
+ * @returns Transformed response with camelCase fields
+ */
+function transformBackendResponse(response: any): ChatResponse {
+  return {
+    response: response.response || '',
+    confidence: response.confidence || 0,
+    confidence_level: response.confidence_level || 'insufficient',
+    sources: (response.sources || []).map((source: any) => ({
+      chunkText: source.chunk_text || source.chunkText || '',
+      similarityScore: source.similarity_score ?? source.similarityScore ?? 0,
+      chapter: source.chapter || 'Unknown',
+      section: source.section || 'Unknown',
+      url: source.url,
+      chunkIndex: source.chunk_index ?? source.chunkIndex ?? 0,
+      pageNumber: source.page_number ?? source.pageNumber,
+    })),
+    session_id: response.session_id || '',
+    should_answer: response.should_answer !== false,
+    refusal_reason: response.refusal_reason,
+    timestamp: response.timestamp,
+  };
 }
 
 /**
@@ -262,8 +289,8 @@ export async function streamChatMessage(
               break;
 
             case 'done':
-              // Final response with metadata
-              const response: ChatResponse = {
+              // Final response with metadata - transform from snake_case
+              const transformedResponse = transformBackendResponse({
                 response: data.response || '',
                 confidence: data.confidence || 0,
                 confidence_level: data.confidence_level || 'insufficient',
@@ -271,8 +298,8 @@ export async function streamChatMessage(
                 session_id: data.session_id || request.session_id,
                 should_answer: data.should_answer !== false,
                 refusal_reason: data.refusal_reason,
-              };
-              callbacks.onDone(response);
+              });
+              callbacks.onDone(transformedResponse);
               controller.abort(); // Close the connection
               break;
 
@@ -295,7 +322,7 @@ export async function streamChatMessage(
         if (!hasError) {
           console.warn('[RAGChatbot] SSE connection error, falling back to synchronous:', error);
 
-          // Fallback to synchronous request
+          // Fallback to synchronous request (already transforms response)
           sendChatMessage(request, config)
             .then((response) => callbacks.onDone(response))
             .catch((error) => callbacks.onError(error));

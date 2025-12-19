@@ -6,7 +6,9 @@ Implements search_textbook as an async function tool for the OpenAI agent.
 import hashlib
 from typing import List, Dict, Any
 import asyncio
+import os
 
+import cohere
 from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchValue
@@ -19,6 +21,7 @@ from agent_api.utils.circuit_breaker import CircuitBreaker
 
 # Initialize clients
 openai_client = OpenAI(api_key=settings.openai_api_key)
+cohere_client = cohere.Client(api_key=os.getenv("COHERE_API_KEY"))  # For embeddings (matches Qdrant)
 qdrant_client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
 
 # Initialize circuit breaker for Qdrant (T045)
@@ -49,25 +52,26 @@ async def search_textbook(query: str, top_k: int = None, similarity_threshold: f
     if similarity_threshold is None:
         similarity_threshold = settings.similarity_threshold_default
     
-    # Generate query embedding with exponential backoff retry (T044)
-    @openai_retry
+    # Generate query embedding using Cohere (matches Qdrant collection)
     def create_embedding():
-        return openai_client.embeddings.create(
-            input=query,
-            model=settings.openai_embedding_model
+        response = cohere_client.embed(
+            texts=[query],
+            model="embed-english-v3.0",
+            input_type="search_query"  # For queries (vs search_document for indexing)
         )
+        return response.embeddings[0]
 
-    embedding_response = await asyncio.to_thread(create_embedding)
-    query_vector = embedding_response.data[0].embedding
+    query_vector = await asyncio.to_thread(create_embedding)
 
     # Search Qdrant with circuit breaker protection (T045)
     def search_qdrant():
-        return qdrant_client.search(
+        return qdrant_client.query_points(
             collection_name=settings.qdrant_collection,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
-            score_threshold=similarity_threshold
-        )
+            # Note: score_threshold temporarily removed for debugging
+            # score_threshold=similarity_threshold
+        ).points
 
     search_results = await asyncio.to_thread(
         qdrant_circuit_breaker.call,
@@ -81,7 +85,7 @@ async def search_textbook(query: str, top_k: int = None, similarity_threshold: f
     chunk_embeddings = []
 
     for hit in search_results:
-        chunks.append(hit.payload.get("text", ""))
+        chunks.append(hit.payload.get("content", ""))
         scores.append(hit.score)
 
         # Extract chunk embedding for diversity calculation (T036)
@@ -94,7 +98,7 @@ async def search_textbook(query: str, top_k: int = None, similarity_threshold: f
             section=hit.payload.get("section", "Unknown"),
             url=hit.payload.get("url", ""),
             chunk_index=hit.payload.get("chunk_index", 0),
-            content_hash=hashlib.sha256(hit.payload.get("text", "").encode()).hexdigest()[:16]
+            content_hash=hashlib.sha256(hit.payload.get("content", "").encode()).hexdigest()[:16]
         )
         metadata_list.append(metadata)
 

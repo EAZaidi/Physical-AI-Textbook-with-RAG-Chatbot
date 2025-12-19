@@ -141,6 +141,7 @@ export function ChatProvider({ children, config }: ChatProviderProps): JSX.Eleme
         session_id: session.sessionId,
         context: session.selectedContext || undefined,
         history: history.length > 0 ? history : undefined,
+        stream: config.streamingEnabled, // Set stream flag based on config
       };
 
       // Use streaming if enabled

@@ -138,14 +138,14 @@ def determine_confidence_level(
         Tuple of (confidence_level, should_answer)
     """
     # HIGH confidence
-    if (avg_sim >= settings.confidence_threshold_high and 
-        min_sim >= 0.75 and 
+    if (avg_sim >= settings.confidence_threshold_high and
+        min_sim >= 0.45 and
         count >= 3):
         return "high", True
-    
-    # MEDIUM confidence  
-    elif (avg_sim >= settings.confidence_threshold_medium and 
-          min_sim >= 0.65 and 
+
+    # MEDIUM confidence
+    elif (avg_sim >= settings.confidence_threshold_medium and
+          min_sim >= 0.35 and
           count >= 2):
         return "medium", True
     

@@ -15,7 +15,7 @@ export interface LoadingIndicatorProps {
 /**
  * LoadingIndicator component - animated spinner with text
  */
-export function LoadingIndicator({ message = 'Searching textbook...' }: LoadingIndicatorProps): JSX.Element {
+export function LoadingIndicator({ message = 'Thinking...' }: LoadingIndicatorProps): JSX.Element {
   return (
     <div className={styles.loadingIndicator} role="status" aria-live="polite">
       <div className={styles.spinner} aria-hidden="true">
